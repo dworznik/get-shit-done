@@ -125,8 +125,8 @@ AskUserQuestion([
     multiSelect: false,
     options: [
       { label: "None (Recommended)", description: "Commit directly to current branch" },
-      { label: "Per Phase", description: "Create branch for each phase (gsd/phase-{N}-{name})" },
-      { label: "Per Milestone", description: "Create branch for entire milestone (gsd/{version}-{name})" }
+      { label: "Per Phase", description: "Create branch for each phase (feature/phase-{N}-{name})" },
+      { label: "Per Milestone", description: "Create branch for entire milestone (feature/{version}-{name})" }
     ]
   },
   {

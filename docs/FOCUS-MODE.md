@@ -4,6 +4,9 @@ Focus mode is GSD's slim path for narrow, high-signal delivery work.
 
 It is optimized for solo developers making bounded changes without paying the full milestone/phase ceremony cost.
 
+For a single bounded change, use `/gsd:focus`.
+For a list of bounded changes that should land as stacked pull requests, use `/gsd:focus-stack` and the stacked workflow described in [FOCUS-STACKS.md](./FOCUS-STACKS.md).
+
 ## Target User
 
 - Solo developer or senior IC working in an existing project
@@ -22,6 +25,13 @@ Optional escalation only when the task needs it:
 - `research` when the domain or dependency is unfamiliar
 - `plan-check` when scope or coupling increases risk
 - `full verify` when the change is risky or user-facing
+
+## Single Slice vs Focus Stack
+
+- **`/gsd:focus`** — one narrow feature, fix, or refactor
+- **`/gsd:focus-stack`** — multiple narrow slices delivered as stacked PRs
+
+Focus stacks do not replace focus mode. They orchestrate multiple focus-mode slices, one PR at a time, with automatic descendant restacking during explicit resume/restack runs.
 
 ## Task Classifier
 

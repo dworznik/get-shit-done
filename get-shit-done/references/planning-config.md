@@ -125,14 +125,14 @@ To use uncommitted mode:
 
 **When `git.branching_strategy: "phase"`:**
 - `execute-phase` creates/switches to a branch before execution
-- Branch name from `phase_branch_template` (e.g., `gsd/phase-03-authentication`)
+- Branch name from `phase_branch_template` (e.g., `feature/phase-03-authentication`)
 - All plan commits go to that branch
 - User merges branches manually after phase completion
 - `complete-milestone` offers to merge all phase branches
 
 **When `git.branching_strategy: "milestone"`:**
 - First `execute-phase` of milestone creates the milestone branch
-- Branch name from `milestone_branch_template` (e.g., `gsd/v1.0-mvp`)
+- Branch name from `milestone_branch_template` (e.g., `feature/v1.0-mvp`)
 - All phases in milestone commit to same branch
 - `complete-milestone` offers to merge milestone branch to main
 

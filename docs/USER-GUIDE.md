@@ -436,6 +436,7 @@ The `security.cjs` module scans for known injection patterns (role overrides, in
 |---------|---------|-------------|
 | `/gsd:map-codebase` | Analyze existing codebase | Before `/gsd:new-project` on existing code |
 | `/gsd:focus` | Recommended fast path for bounded work | Small features, precise fixes, focused refactors |
+| `/gsd:focus-stack` | Managed stacked PR flow for bounded work | Several small dependent slices, reviewable change chains |
 | `/gsd:quick` | Ad-hoc task with GSD guarantees | Bug fixes, small features, config changes |
 | `/gsd:debug [desc]` | Systematic debugging with persistent state | When something breaks |
 | `/gsd:forensics` | Diagnostic report for workflow failures | When state, artifacts, or git history seem corrupted |
@@ -543,7 +544,7 @@ GSD stores project settings in `.planning/config.json`. Configure during `/gsd:n
 | `hooks.workflow_guard` | `true`, `false` | `false` | Warn on file edits outside GSD workflow context |
 
 Disable workflow toggles to speed up phases in familiar domains or when conserving tokens.
-For narrow delivery work, prefer `/gsd:focus` rather than turning global checks off first.
+For narrow delivery work, prefer `/gsd:focus` or `/gsd:focus-stack` rather than turning global checks off first.
 
 ### Git Branching
 

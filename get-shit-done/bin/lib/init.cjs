@@ -442,6 +442,116 @@ function cmdInitQuick(cwd, description, raw) {
   output(withProjectRoot(cwd, result), raw);
 }
 
+function cmdInitFocusStack(cwd, description, raw) {
+  const config = loadConfig(cwd);
+  const now = new Date();
+  const slug = description ? generateSlugInternal(description)?.substring(0, 40) : null;
+
+  const yy = String(now.getFullYear()).slice(-2);
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const dd = String(now.getDate()).padStart(2, '0');
+  const dateStr = yy + mm + dd;
+  const secondsSinceMidnight = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
+  const timeBlocks = Math.floor(secondsSinceMidnight / 2);
+  const timeEncoded = timeBlocks.toString(36).padStart(3, '0');
+  const stackId = dateStr + '-' + timeEncoded;
+
+  let gitAvailable = false;
+  let currentBranch = null;
+  let gitStatusClean = false;
+  try {
+    execSync('git rev-parse --is-inside-work-tree', {
+      cwd,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    gitAvailable = true;
+
+    currentBranch = execSync('git rev-parse --abbrev-ref HEAD', {
+      cwd,
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+    }).trim();
+
+    const status = execSync('git status --porcelain', {
+      cwd,
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+    }).trim();
+    gitStatusClean = status.length === 0;
+  } catch {}
+
+  let ghAvailable = false;
+  let ghAuthenticated = false;
+  try {
+    execSync('gh --version', {
+      cwd,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    ghAvailable = true;
+  } catch {}
+
+  if (ghAvailable) {
+    try {
+      execSync('gh auth status', {
+        cwd,
+        stdio: ['pipe', 'pipe', 'pipe'],
+      });
+      ghAuthenticated = true;
+    } catch {}
+  }
+
+  const phasePrefix = config.phase_branch_template?.includes('/')
+    ? config.phase_branch_template.split('/')[0] + '/'
+    : 'feature/';
+
+  const result = {
+    // Models
+    planner_model: resolveModelInternal(cwd, 'gsd-planner'),
+    executor_model: resolveModelInternal(cwd, 'gsd-executor'),
+    checker_model: resolveModelInternal(cwd, 'gsd-plan-checker'),
+    verifier_model: resolveModelInternal(cwd, 'gsd-verifier'),
+    debugger_model: resolveModelInternal(cwd, 'gsd-debugger'),
+
+    // Config
+    commit_docs: config.commit_docs,
+    phase_branch_template: config.phase_branch_template,
+    milestone_branch_template: config.milestone_branch_template,
+
+    // Stack info
+    stack_id: stackId,
+    stack_slug: slug,
+    description: description || null,
+    branch_prefix: phasePrefix,
+
+    // Environment
+    git_available: gitAvailable,
+    git_status_clean: gitStatusClean,
+    current_branch: currentBranch,
+    gh_available: ghAvailable,
+    gh_authenticated: ghAuthenticated,
+
+    // Timestamps
+    date: now.toISOString().split('T')[0],
+    timestamp: now.toISOString(),
+
+    // Paths
+    focus_stack_dir: '.planning/focus-stacks',
+    stack_dir: slug ? `.planning/focus-stacks/${stackId}-${slug}` : `.planning/focus-stacks/${stackId}`,
+    state_path: slug
+      ? `.planning/focus-stacks/${stackId}-${slug}/state.json`
+      : `.planning/focus-stacks/${stackId}/state.json`,
+    stack_doc_path: slug
+      ? `.planning/focus-stacks/${stackId}-${slug}/STACK.md`
+      : `.planning/focus-stacks/${stackId}/STACK.md`,
+
+    // File existence
+    roadmap_exists: pathExistsInternal(cwd, '.planning/ROADMAP.md'),
+    planning_exists: pathExistsInternal(cwd, '.planning'),
+  };
+
+  output(result, raw);
+}
+
 function cmdInitResume(cwd, raw) {
   const config = loadConfig(cwd);
 
@@ -1348,6 +1458,7 @@ module.exports = {
   cmdInitNewProject,
   cmdInitNewMilestone,
   cmdInitQuick,
+  cmdInitFocusStack,
   cmdInitResume,
   cmdInitVerifyWork,
   cmdInitPhaseOp,

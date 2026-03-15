@@ -24,6 +24,43 @@ Check for active sessions:
 ```bash
 ls .planning/debug/*.md 2>/dev/null | grep -v resolved | head -5
 ```
+
+Detect whether the current branch belongs to a managed focus stack:
+```bash
+CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)
+STACK_CONTEXT=$(CURRENT_BRANCH="$CURRENT_BRANCH" node <<'NODE'
+const fs = require('fs');
+const path = require('path');
+
+const cwd = process.cwd();
+const branch = process.env.CURRENT_BRANCH;
+if (!branch) process.exit(0);
+
+const stackRoot = path.join(cwd, '.planning', 'focus-stacks');
+if (!fs.existsSync(stackRoot)) process.exit(0);
+
+for (const entry of fs.readdirSync(stackRoot)) {
+  const statePath = path.join(stackRoot, entry, 'state.json');
+  if (!fs.existsSync(statePath)) continue;
+  try {
+    const state = JSON.parse(fs.readFileSync(statePath, 'utf8'));
+    const slice = (state.slices || []).find(item => item.branch === branch);
+    if (!slice) continue;
+    process.stdout.write(JSON.stringify({
+      stack_id: state.stack_id || entry,
+      stack_dir: path.posix.join('.planning', 'focus-stacks', entry),
+      slice_index: slice.index,
+      slice_title: slice.title,
+      branch: slice.branch,
+      parent_branch: slice.parent_branch,
+      pr_url: slice.pr_url || null,
+    }));
+    process.exit(0);
+  } catch {}
+}
+NODE
+)
+```
 </context>
 
 <process>
@@ -39,6 +76,11 @@ Extract `commit_docs` from init JSON. Resolve debugger model:
 ```bash
 debugger_model=$(node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" resolve-model gsd-debugger --raw)
 ```
+
+If `STACK_CONTEXT` is non-empty:
+- display that debugging is happening on a stack-managed slice
+- show the slice index/title, branch, parent branch, and PR URL if present
+- remind the user that the fix must land on this slice branch, not on the top of the stack
 
 ## 1. Check Active Sessions
 
@@ -88,6 +130,16 @@ goal: find_and_fix
 <debug_file>
 Create: .planning/debug/{slug}.md
 </debug_file>
+
+{if stack context exists}
+<stack_context>
+{STACK_CONTEXT}
+
+Recovery after fix:
+- /gsd:focus-stack --resume {stack_id}
+- /gsd:focus-stack --restack-only {stack_id}
+</stack_context>
+{/if}
 ```
 
 ```
@@ -107,6 +159,9 @@ Task(
   - "Fix now" - spawn fix subagent
   - "Plan fix" - suggest /gsd:plan-phase --gaps
   - "Manual fix" - done
+- If stack context exists:
+  - remind the user to make the fix on the current slice branch
+  - remind them to run `/gsd:focus-stack --resume {stack_id}` after the fix so descendants restack automatically
 
 **If `## CHECKPOINT REACHED`:**
 - Present checkpoint details to user
@@ -146,6 +201,12 @@ Continue debugging {slug}. Evidence is in the debug file.
 <mode>
 goal: find_and_fix
 </mode>
+
+{if stack context exists}
+<stack_context>
+{STACK_CONTEXT}
+</stack_context>
+{/if}
 ```
 
 ```
