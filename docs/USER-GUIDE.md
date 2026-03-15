@@ -435,6 +435,7 @@ The `security.cjs` module scans for known injection patterns (role overrides, in
 | Command | Purpose | When to Use |
 |---------|---------|-------------|
 | `/gsd:map-codebase` | Analyze existing codebase | Before `/gsd:new-project` on existing code |
+| `/gsd:focus` | Recommended fast path for bounded work | Small features, precise fixes, focused refactors |
 | `/gsd:quick` | Ad-hoc task with GSD guarantees | Bug fixes, small features, config changes |
 | `/gsd:debug [desc]` | Systematic debugging with persistent state | When something breaks |
 | `/gsd:forensics` | Diagnostic report for workflow failures | When state, artifacts, or git history seem corrupted |
@@ -542,6 +543,7 @@ GSD stores project settings in `.planning/config.json`. Configure during `/gsd:n
 | `hooks.workflow_guard` | `true`, `false` | `false` | Warn on file edits outside GSD workflow context |
 
 Disable workflow toggles to speed up phases in familiar domains or when conserving tokens.
+For narrow delivery work, prefer `/gsd:focus` rather than turning global checks off first.
 
 ### Git Branching
 
@@ -632,6 +634,21 @@ claude --dangerously-skip-permissions
 /gsd:new-project            # Questions focus on what you're ADDING
 # (normal phase workflow from here)
 ```
+
+### Focus Mode
+
+```bash
+/gsd:focus
+> "Add a dark mode toggle to settings"
+```
+
+Use this for the default slim workflow:
+
+```text
+spec -> implement -> self-review -> verify
+```
+
+Focus mode stays in `.planning/quick/`, requires bounded scope, and escalates heavier checks only when the task is risky, unknown-domain, or too broad.
 
 ### Quick Bug Fix
 
@@ -727,7 +744,7 @@ Run `/gsd:progress`. It reads all state files and tells you exactly where you ar
 
 ### Need to Change Something After Execution
 
-Do not re-run `/gsd:execute-phase`. Use `/gsd:quick` for targeted fixes, or `/gsd:verify-work` to systematically identify and fix issues through UAT.
+Do not re-run `/gsd:execute-phase`. Use `/gsd:focus` for the default targeted fix path, `/gsd:quick` for the lightest possible ad-hoc path, or `/gsd:verify-work` to systematically identify and fix issues through UAT.
 
 ### Model Costs Too High
 
@@ -808,7 +825,7 @@ If the installer crashes with `EPERM: operation not permitted, scandir` on Windo
 | Milestone audit found gaps | `/gsd:plan-milestone-gaps` |
 | Something broke | `/gsd:debug "description"` |
 | Workflow state seems corrupted | `/gsd:forensics` |
-| Quick targeted fix | `/gsd:quick` |
+| Quick targeted fix | `/gsd:focus` |
 | Plan doesn't match your vision | `/gsd:discuss-phase [N]` then re-plan |
 | Costs running high | `/gsd:set-profile budget` and `/gsd:settings` to toggle agents off |
 | Update broke local changes | `/gsd:reapply-patches` |

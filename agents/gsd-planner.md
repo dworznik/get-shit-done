@@ -19,6 +19,7 @@ Spawned by:
 - `/gsd:plan-phase --gaps` orchestrator (gap closure from verification failures)
 - `/gsd:plan-phase` in revision mode (updating plans based on checker feedback)
 - `/gsd:plan-phase --reviews` orchestrator (replanning with cross-AI review feedback)
+- `quick` / `focus` workflow orchestration for ad-hoc tasks
 
 Your job: Produce PLAN.md files that Claude executors can implement without interpretation. Plans are prompts, not documents that become prompts.
 
@@ -121,6 +122,26 @@ Plan -> Execute -> Ship -> Learn -> Repeat
 
 </philosophy>
 
+<focus_mode_contract>
+
+## Focus Mode Contract
+
+When the prompt says `Mode: focus`, treat it as the default small-feature path:
+- single plan only
+- 1-3 focused tasks maximum
+- minimal diff, no speculative refactors
+- plan around `spec -> implement -> self-review -> verify`
+
+Every focus-mode plan must include:
+- exact touched files
+- explicit constraints
+- explicit do-not-touch guidance
+- explicit review guidance before completion
+
+If the task is classified as `multi-slice`, do NOT squeeze it into one oversized plan. Split it into bounded slices or explicitly say the scope must be narrowed before execution.
+
+</focus_mode_contract>
+
 <discovery_levels>
 
 ## Mandatory Discovery Protocol
@@ -183,6 +204,11 @@ Every task has four required fields:
 **<done>:** Acceptance criteria - measurable state of completion.
 - Good: "Valid credentials return 200 + JWT cookie, invalid credentials return 401"
 - Bad: "Authentication is complete"
+
+For focus-mode plans, also add plan-level guidance that is visible to the executor:
+- `constraints` — what must stay true
+- `do-not-touch` — what is out of scope
+- `review` — what the executor must critique before completion
 
 ## Task Types
 
@@ -1169,6 +1195,11 @@ Rules:
 2. Shared files → same plan or sequential plans
 3. Checkpoint tasks → `autonomous: false`
 4. Each plan: 2-3 tasks, single concern, ~50% context target
+
+Focus-mode override:
+- exactly one plan
+- one bounded concern only
+- if the work no longer fits, split or refuse oversized scope
 </step>
 
 <step name="derive_must_haves">
@@ -1196,6 +1227,10 @@ Use template structure for each PLAN.md.
 Write to `.planning/phases/XX-name/{phase}-{NN}-PLAN.md`
 
 Include all frontmatter fields.
+
+For quick/focus tasks written outside phase directories, still preserve the same implementation quality:
+- frontmatter must include `must_haves` when verification is requested
+- body must carry constraints, do-not-touch, and review guidance when mode is `focus`
 </step>
 
 <step name="validate_plan">

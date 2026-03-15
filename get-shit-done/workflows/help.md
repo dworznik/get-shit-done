@@ -9,9 +9,9 @@ Display the complete GSD command reference. Output ONLY the reference content. D
 
 ## Quick Start
 
-1. `/gsd:new-project` - Initialize project (includes research, requirements, roadmap)
-2. `/gsd:plan-phase 1` - Create detailed plan for first phase
-3. `/gsd:execute-phase 1` - Execute the phase
+1. `/gsd:focus` - Run the recommended fast path for a small bounded task
+2. `/gsd:new-project` - Initialize a project when the work needs roadmap structure
+3. `/gsd:plan-phase 1` - Create detailed plan for the first roadmap phase
 
 ## Staying Updated
 
@@ -134,6 +134,19 @@ Usage: `/gsd:do I want to start a new milestone`
 
 ### Quick Mode
 
+**`/gsd:focus`**
+Execute a narrow feature, fix, or refactor through GSD's recommended slim workflow.
+
+- Uses the quick-task substrate with stronger defaults
+- Runs `spec -> implement -> self-review -> verify`
+- Escalates to plan-checking only when the task is risky or too broad
+- Stores artifacts in `.planning/quick/` and updates STATE.md tracking
+
+Use when you want the default small-feature delivery path.
+
+Usage: `/gsd:focus`
+Result: Creates `.planning/quick/NNN-slug/PLAN.md`, `.planning/quick/NNN-slug/SUMMARY.md`
+
 **`/gsd:quick [--full] [--discuss] [--research]`**
 Execute small, ad-hoc tasks with GSD guarantees but skip optional agents.
 
@@ -141,6 +154,8 @@ Quick mode uses the same system with a shorter path:
 - Spawns planner + executor (skips researcher, checker, verifier by default)
 - Quick tasks live in `.planning/quick/` separate from planned phases
 - Updates STATE.md tracking (not ROADMAP.md)
+
+Use when you already know exactly what to do and want the lowest-ceremony path.
 
 Flags enable additional quality steps:
 - `--discuss` — Lightweight discussion to surface gray areas before planning
@@ -415,6 +430,7 @@ Configure workflow toggles and model profile interactively.
 
 - Toggle researcher, plan checker, verifier agents
 - Select model profile (quality/balanced/budget/inherit)
+- Treat those toggles as optional quality levers for broader work; use `/gsd:focus` for the default bounded fast path
 - Updates `.planning/config.json`
 
 Usage: `/gsd:settings`
