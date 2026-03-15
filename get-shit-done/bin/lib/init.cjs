@@ -277,6 +277,7 @@ function cmdInitQuick(cwd, description, raw) {
 
     // Config
     commit_docs: config.commit_docs,
+    codex_supervisor_enabled: config.codex_supervisor,
 
     // Quick task info
     quick_id: quickId,

@@ -95,7 +95,7 @@ INIT=$(node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" init quick "$DESCRIP
 if [[ "$INIT" == @file:* ]]; then INIT=$(cat "${INIT#@file:}"); fi
 ```
 
-Parse JSON for: `planner_model`, `executor_model`, `checker_model`, `verifier_model`, `commit_docs`, `quick_id`, `slug`, `date`, `timestamp`, `quick_dir`, `task_dir`, `roadmap_exists`, `planning_exists`.
+Parse JSON for: `planner_model`, `executor_model`, `checker_model`, `verifier_model`, `commit_docs`, `codex_supervisor_enabled`, `quick_id`, `slug`, `date`, `timestamp`, `quick_dir`, `task_dir`, `roadmap_exists`, `planning_exists`.
 
 If `roadmap_exists` is false: error — fast-path tasks require an active project with ROADMAP.md. Run `/gsd:new-project` first.
 
@@ -111,12 +111,39 @@ Create and store:
 ```bash
 QUICK_DIR=".planning/quick/${quick_id}-${slug}"
 mkdir -p "$QUICK_DIR"
+RUN_MANIFEST="$QUICK_DIR/RUN_MANIFEST.json"
 ```
 
 Report:
 ```
 Creating ${WORKFLOW_MODE} task ${quick_id}: ${DESCRIPTION}
 Directory: ${QUICK_DIR}
+```
+
+Write the initial run manifest:
+```bash
+QUICK_DIR="$QUICK_DIR" RUN_MANIFEST="$RUN_MANIFEST" QUICK_ID="$quick_id" WORKFLOW_MODE="$WORKFLOW_MODE" TASK_CLASS="${WORKFLOW_MODE === 'focus' ? TASK_CLASS : 'quick'}" DESCRIPTION="$DESCRIPTION" CONTEXT_PATH="" PLAN_PATH="" SUMMARY_PATH="" STACK_STATE_PATH="" SUPERVISOR_ENABLED="${codex_supervisor_enabled}" node <<'NODE'
+const fs = require('fs');
+const path = require('path');
+const manifest = {
+  run_id: process.env.QUICK_ID,
+  mode: process.env.WORKFLOW_MODE,
+  classifier: process.env.TASK_CLASS,
+  description: process.env.DESCRIPTION,
+  quick_dir: process.env.QUICK_DIR,
+  context_path: process.env.CONTEXT_PATH || null,
+  plan_path: process.env.PLAN_PATH || null,
+  summary_path: process.env.SUMMARY_PATH || null,
+  stack_state_path: process.env.STACK_STATE_PATH || null,
+  planner_status: 'pending',
+  execution_status: 'pending',
+  verification_status: 'pending',
+  supervisor_pre_status: process.env.SUPERVISOR_ENABLED === 'true' ? 'pending' : 'disabled',
+  supervisor_post_status: process.env.SUPERVISOR_ENABLED === 'true' ? 'pending' : 'disabled',
+  final_status: 'planning',
+};
+fs.writeFileSync(process.env.RUN_MANIFEST, JSON.stringify(manifest, null, 2));
+NODE
 ```
 
 ---
@@ -129,6 +156,8 @@ If enabled, run the existing quick discussion flow:
 - write `${QUICK_DIR}/${quick_id}-CONTEXT.md`
 
 Keep it lean. This file should capture locked decisions, examples, and references only.
+
+After writing CONTEXT.md, update `RUN_MANIFEST.json` `context_path`.
 
 ---
 
@@ -179,6 +208,11 @@ After planner returns:
 - verify `${QUICK_DIR}/${quick_id}-PLAN.md` exists
 - report the plan path
 
+Update `RUN_MANIFEST.json`:
+- `plan_path` → `${QUICK_DIR}/${quick_id}-PLAN.md`
+- `planner_status` → `planned`
+- `final_status` → `planned`
+
 ---
 
 **Step 5.5: Plan-check loop (when enabled)**
@@ -219,6 +253,39 @@ If issues are found:
 - revise with `gsd-planner`
 - cap the loop at 2 iterations
 - if unresolved after 2 rounds, ask whether to force proceed or abort
+
+If the plan-check loop passes, update `RUN_MANIFEST.json` `planner_status` to `checked`.
+
+---
+
+**Step 5.75: Codex supervisor preflight (only when `codex_supervisor_enabled`)**
+
+Run this step only when the init JSON indicates `codex_supervisor_enabled: true`.
+
+Build the preflight bundle:
+```bash
+PRE_BUNDLE=$(node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" supervisor-bundle "$QUICK_DIR" --stage pre --raw)
+```
+
+Invoke the Codex-only supervisor skill:
+```text
+Skill(skill="gsd:supervisor", args="--bundle ${PRE_BUNDLE} --stage pre")
+```
+
+After it returns:
+- verify `${QUICK_DIR}/SUPERVISOR-FINDINGS.json` exists
+- read normalized findings:
+```bash
+SUPERVISOR_PRE=$(node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" supervisor-findings "${QUICK_DIR}/SUPERVISOR-FINDINGS.json")
+if [[ "$SUPERVISOR_PRE" == @file:* ]]; then SUPERVISOR_PRE=$(cat "${SUPERVISOR_PRE#@file:}"); fi
+SUPERVISOR_PRE_STATUS=$(node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" supervisor-findings "${QUICK_DIR}/SUPERVISOR-FINDINGS.json" --raw)
+```
+- update `RUN_MANIFEST.json` `supervisor_pre_status`
+
+Gate behavior:
+- `blocked` → stop before execution, present the supervisor findings, keep `final_status` as `blocked`
+- `warnings` → continue and record warnings in the manifest
+- `passed` → continue normally
 
 ---
 
@@ -265,6 +332,11 @@ After executor returns:
 - extract commit hash from output when available
 - treat the known Claude runtime `classifyHandoffIfNeeded is not defined` bug as non-fatal if summary and commits exist
 
+Update `RUN_MANIFEST.json`:
+- `summary_path` → `${QUICK_DIR}/${quick_id}-SUMMARY.md`
+- `execution_status` → `completed`
+- `final_status` → `executed`
+
 ---
 
 **Step 6.5: Verify (when enabled)**
@@ -302,6 +374,39 @@ If gaps are found, offer:
 - re-run executor to close them
 - accept as-is
 
+Update `RUN_MANIFEST.json` `verification_status` to the mapped verification status.
+
+---
+
+**Step 6.75: Codex supervisor postflight (only when `codex_supervisor_enabled`)**
+
+Run this step only when the init JSON indicates `codex_supervisor_enabled: true`.
+
+Build the postflight bundle:
+```bash
+POST_BUNDLE=$(node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" supervisor-bundle "$QUICK_DIR" --stage post --raw)
+```
+
+Invoke the Codex-only supervisor skill:
+```text
+Skill(skill="gsd:supervisor", args="--bundle ${POST_BUNDLE} --stage post")
+```
+
+After it returns:
+- verify `${QUICK_DIR}/SUPERVISOR-FINDINGS.json` exists
+- read normalized findings:
+```bash
+SUPERVISOR_POST=$(node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" supervisor-findings "${QUICK_DIR}/SUPERVISOR-FINDINGS.json")
+if [[ "$SUPERVISOR_POST" == @file:* ]]; then SUPERVISOR_POST=$(cat "${SUPERVISOR_POST#@file:}"); fi
+SUPERVISOR_POST_STATUS=$(node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" supervisor-findings "${QUICK_DIR}/SUPERVISOR-FINDINGS.json" --raw)
+```
+- update `RUN_MANIFEST.json` `supervisor_post_status`
+
+Gate behavior:
+- `blocked` → stop before final success reporting, keep `final_status` as `blocked`
+- `warnings` → continue and record warnings in the manifest
+- `passed` → continue normally
+
 ---
 
 **Step 7: Update STATE.md**
@@ -332,10 +437,15 @@ Last activity: ${date} - Completed ${WORKFLOW_MODE} task ${quick_id}: ${DESCRIPT
 
 Stage and commit:
 - `${QUICK_DIR}/${quick_id}-PLAN.md`
+- `${QUICK_DIR}/RUN_MANIFEST.json`
 - `${QUICK_DIR}/${quick_id}-SUMMARY.md`
 - `.planning/STATE.md`
 - `${QUICK_DIR}/${quick_id}-CONTEXT.md` when discussion ran
 - `${QUICK_DIR}/${quick_id}-VERIFICATION.md` when verification ran
+- `${QUICK_DIR}/SUPERVISOR-PRE.json` when supervisor preflight ran
+- `${QUICK_DIR}/SUPERVISOR-POST.json` when supervisor postflight ran
+- `${QUICK_DIR}/SUPERVISOR-FINDINGS.json` when supervisor ran
+- `${QUICK_DIR}/SUPERVISOR-REPORT.md` when supervisor ran
 
 ```bash
 node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" commit "docs(quick-${quick_id}): ${DESCRIPTION}" --files ${file_list}
@@ -372,9 +482,12 @@ Ready for next task: ${WORKFLOW_MODE === 'focus' ? '/gsd:focus' : '/gsd:quick'}
 - [ ] `${quick_id}-PLAN.md` created by planner
 - [ ] Focus mode requires a bounded single-plan artifact with review guidance
 - [ ] Plan checker runs when forced or escalated by classifier
+- [ ] `RUN_MANIFEST.json` is created and updated through the task lifecycle
+- [ ] Codex supervisor preflight writes `SUPERVISOR-PRE.json` and findings when enabled
 - [ ] `${quick_id}-SUMMARY.md` created by executor
 - [ ] Focus mode requires a self-review pass before completion
 - [ ] Verification runs when forced or enabled by classifier
+- [ ] Codex supervisor postflight writes `SUPERVISOR-POST.json` and findings when enabled
 - [ ] STATE.md updated with the quick task row
 - [ ] Artifacts committed
 </success_criteria>

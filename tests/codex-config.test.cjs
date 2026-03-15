@@ -153,6 +153,18 @@ tools: Read, Grep, Glob
     assert.ok(result.includes('sandbox_mode = "read-only"'), 'has read-only');
   });
 
+  test('sets read-only for supervisor', () => {
+    const supervisor = `---
+name: gsd-supervisor
+description: Reviews bundles
+tools: Read, Grep, Glob
+---
+
+<role>You supervise.</role>`;
+    const result = generateCodexAgentToml('gsd-supervisor', supervisor);
+    assert.ok(result.includes('sandbox_mode = "read-only"'), 'supervisor is read-only');
+  });
+
   test('includes developer_instructions from body', () => {
     const result = generateCodexAgentToml('gsd-executor', sampleAgent);
     assert.ok(result.includes("developer_instructions = '''"), 'has literal triple-quoted instructions');
@@ -171,7 +183,7 @@ tools: Read, Grep, Glob
 describe('CODEX_AGENT_SANDBOX', () => {
   test('has all 11 agents mapped', () => {
     const agentNames = Object.keys(CODEX_AGENT_SANDBOX);
-    assert.strictEqual(agentNames.length, 11, 'has 11 agents');
+    assert.strictEqual(agentNames.length, 12, 'has 12 agents');
   });
 
   test('workspace-write agents have write tools', () => {
@@ -186,7 +198,7 @@ describe('CODEX_AGENT_SANDBOX', () => {
   });
 
   test('read-only agents have no write tools', () => {
-    const readOnlyAgents = ['gsd-plan-checker', 'gsd-integration-checker'];
+    const readOnlyAgents = ['gsd-plan-checker', 'gsd-integration-checker', 'gsd-supervisor'];
     for (const name of readOnlyAgents) {
       assert.strictEqual(CODEX_AGENT_SANDBOX[name], 'read-only', `${name} is read-only`);
     }
@@ -226,6 +238,12 @@ describe('generateCodexConfigBlock', () => {
     assert.ok(result.includes('[agents.gsd-planner]'), 'has planner section');
     assert.ok(result.includes('config_file = "agents/gsd-executor.toml"'), 'has executor config_file');
     assert.ok(result.includes('"Executes plans"'), 'has executor description');
+  });
+
+  test('includes supervisor when present in agent list', () => {
+    const result = generateCodexConfigBlock([{ name: 'gsd-supervisor', description: 'Reviews bundles' }]);
+    assert.ok(result.includes('[agents.gsd-supervisor]'), 'has supervisor section');
+    assert.ok(result.includes('config_file = "agents/gsd-supervisor.toml"'), 'has supervisor config path');
   });
 });
 
