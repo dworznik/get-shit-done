@@ -5,8 +5,389 @@ const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 const { safeReadFile, loadConfig, isGitIgnored, execGit, normalizePhaseName, comparePhaseNum, getArchivedPhaseDirs, generateSlugInternal, getMilestoneInfo, getMilestonePhaseFilter, resolveModelInternal, stripShippedMilestones, extractCurrentMilestone, planningDir, planningPaths, toPosixPath, output, error, findPhaseInternal, extractOneLinerFromBody, getRoadmapPhaseInternal } = require('./core.cjs');
-const { extractFrontmatter } = require('./frontmatter.cjs');
+const { extractFrontmatter, parseMustHavesBlock } = require('./frontmatter.cjs');
 const { MODEL_PROFILES } = require('./model-profiles.cjs');
+
+function readJsonIfExists(filePath) {
+  try {
+    return JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+  } catch {
+    return null;
+  }
+}
+
+function readTextIfExists(filePath) {
+  try {
+    return fs.readFileSync(filePath, 'utf-8');
+  } catch {
+    return null;
+  }
+}
+
+function parseQuickDir(cwd, quickDirArg) {
+  if (!quickDirArg) {
+    error('quick-dir required');
+  }
+
+  const fullPath = path.isAbsolute(quickDirArg) ? quickDirArg : path.join(cwd, quickDirArg);
+  if (!fs.existsSync(fullPath)) {
+    error(`Quick directory not found: ${quickDirArg}`);
+  }
+
+  const relPath = toPosixPath(path.relative(cwd, fullPath)) || '.';
+  return { fullPath, relPath };
+}
+
+function findQuickArtifact(fullDir, suffix) {
+  try {
+    const matches = fs.readdirSync(fullDir)
+      .filter(name => name.endsWith(suffix))
+      .sort();
+    return matches.length > 0 ? path.join(fullDir, matches[0]) : null;
+  } catch {
+    return null;
+  }
+}
+
+function toRelOrNull(cwd, filePath) {
+  return filePath ? toPosixPath(path.relative(cwd, filePath)) : null;
+}
+
+function markdownSection(content, heading) {
+  if (!content) return null;
+  const escaped = heading.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const regex = new RegExp(`^## ${escaped}\\s*\\n([\\s\\S]*?)(?=^##\\s|\\Z)`, 'm');
+  const match = content.match(regex);
+  return match ? match[1].trim() : null;
+}
+
+function xmlBlocks(content, tagName) {
+  if (!content) return [];
+  const matches = [...content.matchAll(new RegExp(`<${tagName}>([\\s\\S]*?)<\\/${tagName}>`, 'g'))];
+  return matches.map(match => match[1].trim()).filter(Boolean);
+}
+
+function extractTaskFiles(planContent) {
+  const values = xmlBlocks(planContent, 'files');
+  const files = [];
+  for (const value of values) {
+    const lines = value.split('\n').map(line => line.trim()).filter(Boolean);
+    for (const line of lines) {
+      const normalized = line.replace(/^[-*]\s*/, '');
+      for (const part of normalized.split(',')) {
+        const item = part.trim();
+        if (item) files.push(item);
+      }
+    }
+  }
+  return [...new Set(files)];
+}
+
+function extractTaskNames(planContent) {
+  return xmlBlocks(planContent, 'name');
+}
+
+function extractAssumptionBullets(section) {
+  if (!section) return [];
+  return section
+    .split('\n')
+    .map(line => line.trim())
+    .filter(line => /^[-*]\s+/.test(line))
+    .map(line => line.replace(/^[-*]\s+/, '').trim());
+}
+
+function extractCommitHashes(summaryContent) {
+  if (!summaryContent) return [];
+  const hashes = new Set();
+  for (const match of summaryContent.matchAll(/`([a-f0-9]{7,40})`/g)) {
+    hashes.add(match[1]);
+  }
+  return [...hashes];
+}
+
+function extractSelfCheck(summaryContent) {
+  if (!summaryContent) return null;
+  const match = summaryContent.match(/^## Self-Check:\s*(PASSED|FAILED)\s*$/mi);
+  return match ? match[1].toLowerCase() : null;
+}
+
+function extractVerificationStatus(verificationContent) {
+  if (!verificationContent) return null;
+  const frontmatter = extractFrontmatter(verificationContent);
+  if (frontmatter.status) return frontmatter.status;
+  const inline = verificationContent.match(/^status:\s*([a-z_]+)/mi);
+  return inline ? inline[1] : null;
+}
+
+function findStackContext(cwd, quickRelDir) {
+  const stackRoot = path.join(cwd, '.planning', 'focus-stacks');
+  if (!fs.existsSync(stackRoot)) return null;
+
+  const normalizedQuick = toPosixPath(quickRelDir);
+
+  for (const entry of fs.readdirSync(stackRoot, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    const statePath = path.join(stackRoot, entry.name, 'state.json');
+    const state = readJsonIfExists(statePath);
+    if (!state || !Array.isArray(state.slices)) continue;
+
+    const sliceIndex = state.slices.findIndex(slice => {
+      return slice && slice.quick_dir && toPosixPath(slice.quick_dir) === normalizedQuick;
+    });
+    if (sliceIndex === -1) continue;
+
+    const slice = state.slices[sliceIndex];
+    const parent = sliceIndex > 0 ? state.slices[sliceIndex - 1] : null;
+    return {
+      stack_id: state.stack_id || entry.name,
+      stack_dir: toPosixPath(path.join('.planning', 'focus-stacks', entry.name)),
+      state_path: toPosixPath(path.join('.planning', 'focus-stacks', entry.name, 'state.json')),
+      slice_index: slice.index ?? sliceIndex + 1,
+      slice_title: slice.title || null,
+      slice_status: slice.status || null,
+      quick_dir: slice.quick_dir || normalizedQuick,
+      branch: slice.branch || null,
+      parent_branch: slice.parent_branch || parent?.branch || null,
+      dependency_note: slice.dependency_note || null,
+      parent_slice: parent ? {
+        index: parent.index ?? sliceIndex,
+        title: parent.title || null,
+        status: parent.status || null,
+        branch: parent.branch || null,
+      } : null,
+      sibling_statuses: state.slices.map(item => ({
+        index: item.index ?? null,
+        title: item.title || null,
+        status: item.status || null,
+      })),
+    };
+  }
+
+  return null;
+}
+
+function summarizePlan(cwd, planPath) {
+  if (!planPath) return null;
+  const content = readTextIfExists(planPath);
+  if (!content) return null;
+  const frontmatter = extractFrontmatter(content);
+  const rawTruths = parseMustHavesBlock(content, 'truths');
+  const rawArtifacts = parseMustHavesBlock(content, 'artifacts');
+  const rawKeyLinks = parseMustHavesBlock(content, 'key_links');
+  const parsedMustHaves = frontmatter.must_haves || {};
+  const mustHaves = {
+    truths: rawTruths.length > 0 ? rawTruths : (parsedMustHaves.truths || []),
+    artifacts: rawArtifacts.length > 0 ? rawArtifacts : (parsedMustHaves.artifacts || []),
+    key_links: rawKeyLinks.length > 0 ? rawKeyLinks : (parsedMustHaves.key_links || []),
+  };
+  const filesModified = frontmatter.files_modified || [];
+  const taskFiles = extractTaskFiles(content);
+
+  return {
+    path: toRelOrNull(cwd, planPath),
+    requirements: frontmatter.requirements || [],
+    depends_on: frontmatter.depends_on || [],
+    files_modified: filesModified,
+    task_files: taskFiles,
+    touched_files: [...new Set([...filesModified, ...taskFiles])],
+    must_haves: mustHaves,
+    constraints: markdownSection(content, 'Constraints'),
+    do_not_touch: markdownSection(content, 'Do Not Touch'),
+    review: markdownSection(content, 'Review'),
+    assumptions: extractAssumptionBullets(markdownSection(content, 'Assumptions')),
+    open_questions: extractAssumptionBullets(markdownSection(content, 'Open Questions')),
+    task_names: extractTaskNames(content),
+  };
+}
+
+function summarizeSummary(cwd, summaryPath) {
+  if (!summaryPath) return null;
+  const content = readTextIfExists(summaryPath);
+  if (!content) return null;
+  const frontmatter = extractFrontmatter(content);
+  const keyFiles = frontmatter['key-files'] || {};
+  const created = keyFiles.created || [];
+  const modified = keyFiles.modified || [];
+
+  return {
+    path: toRelOrNull(cwd, summaryPath),
+    one_liner: frontmatter['one-liner'] || null,
+    requirements_completed: frontmatter['requirements-completed'] || [],
+    key_files: {
+      created,
+      modified,
+      all: [...new Set([...created, ...modified])],
+    },
+    decisions: frontmatter['key-decisions'] || [],
+    deviations_section: markdownSection(content, 'Deviations from Plan'),
+    issues_section: markdownSection(content, 'Issues Encountered'),
+    self_check: extractSelfCheck(content),
+    commit_hashes: extractCommitHashes(content),
+  };
+}
+
+function normalizeFinding(finding) {
+  return {
+    severity: finding?.severity || 'info',
+    category: finding?.category || 'general',
+    title: finding?.title || 'Untitled finding',
+    evidence: finding?.evidence || '',
+    recommended_action: finding?.recommended_action || '',
+  };
+}
+
+function normalizeSupervisorFindings(content) {
+  let parsed = null;
+
+  try {
+    parsed = JSON.parse(content);
+  } catch {
+    const fenced = content.match(/```json\s*([\s\S]*?)```/i);
+    if (fenced) {
+      try {
+        parsed = JSON.parse(fenced[1]);
+      } catch {}
+    }
+  }
+
+  if (!parsed || typeof parsed !== 'object') {
+    return {
+      stage: null,
+      status: 'blocked',
+      findings: [{
+        severity: 'blocker',
+        category: 'parse',
+        title: 'Supervisor findings were not valid JSON',
+        evidence: content.trim(),
+        recommended_action: 'Re-run the Codex supervisor and ensure it returns the expected JSON payload.',
+      }],
+    };
+  }
+
+  const findings = Array.isArray(parsed.findings) ? parsed.findings.map(normalizeFinding) : [];
+  const status = parsed.status || (findings.some(f => f.severity === 'blocker')
+    ? 'blocked'
+    : findings.length > 0
+      ? 'warnings'
+      : 'passed');
+
+  return {
+    stage: parsed.stage || null,
+    status,
+    findings,
+  };
+}
+
+function cmdSupervisorBundle(cwd, quickDirArg, stage, raw) {
+  if (!stage || !['pre', 'post'].includes(stage)) {
+    error('Usage: supervisor-bundle <quick_dir> --stage pre|post');
+  }
+
+  const { fullPath, relPath } = parseQuickDir(cwd, quickDirArg);
+  const manifestPath = path.join(fullPath, 'RUN_MANIFEST.json');
+  const manifest = readJsonIfExists(manifestPath) || {};
+
+  const planPath = manifest.plan_path
+    ? path.join(cwd, manifest.plan_path)
+    : findQuickArtifact(fullPath, '-PLAN.md');
+  const contextPath = manifest.context_path
+    ? path.join(cwd, manifest.context_path)
+    : findQuickArtifact(fullPath, '-CONTEXT.md');
+  const summaryPath = manifest.summary_path
+    ? path.join(cwd, manifest.summary_path)
+    : findQuickArtifact(fullPath, '-SUMMARY.md');
+  const verificationPath = manifest.verification_path
+    ? path.join(cwd, manifest.verification_path)
+    : findQuickArtifact(fullPath, '-VERIFICATION.md');
+  const stackContext = manifest.stack_state_path
+    ? {
+        ...findStackContext(cwd, relPath),
+        state_path: manifest.stack_state_path,
+      }
+    : findStackContext(cwd, relPath);
+
+  const plan = summarizePlan(cwd, planPath);
+  const summary = stage === 'post' ? summarizeSummary(cwd, summaryPath) : null;
+  const verificationContent = stage === 'post' && verificationPath ? readTextIfExists(verificationPath) : null;
+  const verificationStatus = extractVerificationStatus(verificationContent);
+
+  const bundle = {
+    stage,
+    generated_at: new Date().toISOString(),
+    task: {
+      run_id: manifest.run_id || path.basename(fullPath),
+      mode: manifest.mode || 'quick',
+      classifier: manifest.classifier || (manifest.mode === 'focus' ? 'unknown' : 'quick'),
+      description: manifest.description || null,
+      quick_dir: relPath,
+      context_path: toRelOrNull(cwd, contextPath),
+      plan_path: toRelOrNull(cwd, planPath),
+      summary_path: toRelOrNull(cwd, summaryPath),
+      stack_state_path: manifest.stack_state_path || stackContext?.state_path || null,
+      planner_status: manifest.planner_status || null,
+      execution_status: manifest.execution_status || null,
+      verification_status: manifest.verification_status || verificationStatus,
+      supervisor_pre_status: manifest.supervisor_pre_status || null,
+      supervisor_post_status: manifest.supervisor_post_status || null,
+      final_status: manifest.final_status || null,
+    },
+    artifacts: {
+      manifest_path: toRelOrNull(cwd, manifestPath),
+      state_path: '.planning/STATE.md',
+      context_path: toRelOrNull(cwd, contextPath),
+      plan_path: toRelOrNull(cwd, planPath),
+      summary_path: toRelOrNull(cwd, summaryPath),
+      verification_path: toRelOrNull(cwd, verificationPath),
+      stack_state_path: manifest.stack_state_path || stackContext?.state_path || null,
+      findings_path: toPosixPath(path.join(relPath, 'SUPERVISOR-FINDINGS.json')),
+      report_path: toPosixPath(path.join(relPath, 'SUPERVISOR-REPORT.md')),
+    },
+    plan,
+    stack_context: stackContext,
+  };
+
+  if (stage === 'post') {
+    bundle.execution = {
+      summary,
+      changed_files: summary?.key_files?.all || [],
+      commit_hashes: summary?.commit_hashes || [],
+      self_check: summary?.self_check || null,
+      verifier: {
+        path: toRelOrNull(cwd, verificationPath),
+        status: verificationStatus,
+      },
+      unresolved: {
+        deviations: summary?.deviations_section || null,
+        issues: summary?.issues_section || null,
+      },
+    };
+  }
+
+  const bundlePath = path.join(fullPath, stage === 'pre' ? 'SUPERVISOR-PRE.json' : 'SUPERVISOR-POST.json');
+  fs.writeFileSync(bundlePath, JSON.stringify(bundle, null, 2), 'utf-8');
+
+  output({
+    stage,
+    bundle_path: toRelOrNull(cwd, bundlePath),
+    quick_dir: relPath,
+  }, raw, toRelOrNull(cwd, bundlePath));
+}
+
+function cmdSupervisorFindings(cwd, findingsPathArg, raw) {
+  if (!findingsPathArg) {
+    error('findings-path required for supervisor-findings');
+  }
+
+  const fullPath = path.isAbsolute(findingsPathArg) ? findingsPathArg : path.join(cwd, findingsPathArg);
+  if (!fs.existsSync(fullPath)) {
+    output({ error: 'File not found', path: findingsPathArg }, raw);
+    return;
+  }
+
+  const normalized = normalizeSupervisorFindings(fs.readFileSync(fullPath, 'utf-8'));
+  normalized.path = toPosixPath(path.relative(cwd, fullPath));
+  output(normalized, raw, normalized.status);
+}
 
 function cmdGenerateSlug(text, raw) {
   if (!text) {
@@ -950,6 +1331,8 @@ module.exports = {
   cmdCommit,
   cmdCommitToSubrepo,
   cmdSummaryExtract,
+  cmdSupervisorBundle,
+  cmdSupervisorFindings,
   cmdWebsearch,
   cmdProgressRender,
   cmdTodoComplete,

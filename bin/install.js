@@ -33,6 +33,7 @@ const CODEX_AGENT_SANDBOX = {
   'gsd-debugger': 'workspace-write',
   'gsd-plan-checker': 'read-only',
   'gsd-integration-checker': 'read-only',
+  'gsd-supervisor': 'read-only',
 };
 
 // Copilot tool name mapping — Claude Code tools to GitHub Copilot tools
@@ -129,6 +130,13 @@ function getDirName(runtime) {
   if (runtime === 'antigravity') return '.agent';
   if (runtime === 'cursor') return '.cursor';
   return '.claude';
+}
+
+function shouldInstallCommandFile(baseName, runtime) {
+  if (baseName === 'supervisor') {
+    return runtime === 'codex';
+  }
+  return true;
 }
 
 /**
@@ -2496,6 +2504,9 @@ function copyFlattenedCommands(srcDir, destDir, prefix, pathPrefix, runtime) {
     } else if (entry.name.endsWith('.md')) {
       // Flatten: help.md -> gsd-help.md
       const baseName = entry.name.replace('.md', '');
+      if (!shouldInstallCommandFile(baseName, runtime)) {
+        continue;
+      }
       const destName = `${prefix}-${baseName}.md`;
       const destPath = path.join(destDir, destName);
 
@@ -2556,6 +2567,9 @@ function copyCommandsAsCodexSkills(srcDir, skillsDir, prefix, pathPrefix, runtim
       }
 
       const baseName = entry.name.replace('.md', '');
+      if (!shouldInstallCommandFile(baseName, runtime)) {
+        continue;
+      }
       const skillName = `${currentPrefix}-${baseName}`;
       const skillDir = path.join(skillsDir, skillName);
       fs.mkdirSync(skillDir, { recursive: true });
@@ -2766,6 +2780,10 @@ function copyWithPathReplacement(srcDir, destDir, pathPrefix, runtime, isCommand
     if (entry.isDirectory()) {
       copyWithPathReplacement(srcPath, destPath, pathPrefix, runtime, isCommand, isGlobal);
     } else if (entry.name.endsWith('.md')) {
+      const baseName = entry.name.replace('.md', '');
+      if (isCommand && !shouldInstallCommandFile(baseName, runtime)) {
+        continue;
+      }
       // Replace ~/.claude/ and $HOME/.claude/ and ./.claude/ with runtime-appropriate paths
       // Skip generic replacement for Copilot — convertClaudeToCopilotContent handles all paths
       let content = fs.readFileSync(srcPath, 'utf8');

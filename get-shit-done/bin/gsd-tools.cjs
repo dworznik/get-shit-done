@@ -29,6 +29,8 @@
  *   config-ensure-section              Initialize .planning/config.json
  *   history-digest                     Aggregate all SUMMARY.md data
  *   summary-extract <path> [--fields]  Extract structured data from SUMMARY.md
+ *   supervisor-bundle <dir> --stage    Build supervisor input bundle for quick/focus
+ *   supervisor-findings <path>         Normalize supervisor findings JSON
  *   state-snapshot                     Structured parse of STATE.md
  *   phase-plan-index <phase>           Index plans with waves and status
  *   websearch <query>                  Search web via Brave API (if configured)
@@ -764,6 +766,19 @@ async function runCommand(command, args, cwd, raw) {
       const fieldsIndex = args.indexOf('--fields');
       const fields = fieldsIndex !== -1 ? args[fieldsIndex + 1].split(',') : null;
       commands.cmdSummaryExtract(cwd, summaryPath, fields, raw);
+      break;
+    }
+
+    case 'supervisor-bundle': {
+      const quickDir = args[1];
+      const stageIndex = args.indexOf('--stage');
+      const stage = stageIndex !== -1 ? args[stageIndex + 1] : null;
+      commands.cmdSupervisorBundle(cwd, quickDir, stage, raw);
+      break;
+    }
+
+    case 'supervisor-findings': {
+      commands.cmdSupervisorFindings(cwd, args[1], raw);
       break;
     }
 

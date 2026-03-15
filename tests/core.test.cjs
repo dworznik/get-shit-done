@@ -65,6 +65,7 @@ describe('loadConfig', () => {
     assert.strictEqual(config.parallelization, true);
     assert.strictEqual(config.nyquist_validation, true);
     assert.strictEqual(config.text_mode, false);
+    assert.strictEqual(config.codex_supervisor, false);
   });
 
   test('reads model_profile from config.json', () => {

@@ -57,6 +57,7 @@ describe('config-ensure-section command', () => {
     assert.strictEqual(typeof config.workflow.plan_check, 'boolean');
     assert.strictEqual(typeof config.workflow.verifier, 'boolean');
     assert.strictEqual(typeof config.workflow.nyquist_validation, 'boolean');
+    assert.strictEqual(typeof config.workflow.codex_supervisor, 'boolean');
     // These hardcoded defaults are always present (may be overridden by user defaults)
     assert.ok('model_profile' in config, 'model_profile should exist');
     assert.ok('brave_search' in config, 'brave_search should exist');
@@ -269,7 +270,7 @@ describe('config-get command', () => {
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
-    assert.strictEqual(output, 'balanced');
+    assert.strictEqual(output, readConfig(tmpDir).model_profile);
   });
 
   test('gets a nested value via dot-notation', () => {

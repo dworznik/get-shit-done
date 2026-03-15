@@ -21,6 +21,7 @@ const VALID_CONFIG_KEYS = new Set([
   'workflow.research_before_questions',
   'workflow.discuss_mode',
   'workflow.skip_discuss',
+  'workflow.codex_supervisor',
   'workflow._auto_chain_active',
   'git.branching_strategy', 'git.phase_branch_template', 'git.milestone_branch_template', 'git.quick_branch_template',
   'planning.commit_docs', 'planning.search_gitignored',
@@ -116,6 +117,7 @@ function buildNewProjectConfig(userChoices) {
       research_before_questions: false,
       discuss_mode: 'discuss',
       skip_discuss: false,
+      codex_supervisor: false,
     },
     hooks: {
       context_warnings: true,
