@@ -359,6 +359,38 @@ Use for: small features, focused refactors, bug fixes, test additions, config/to
 
 ---
 
+### Focus Stacks
+
+```
+/gsd:focus-stack
+```
+
+**For several bounded focus-mode slices that should ship as stacked PRs.**
+
+Focus stacks keep the same slice-level delivery loop:
+
+```text
+spec -> implement -> self-review -> verify
+```
+
+Then add stack orchestration on top:
+
+- **One slice per PR** — each item lands on its own branch and PR
+- **Managed restacking** — when a lower slice changes, descendants restack during explicit resume/restack runs
+- **Slice-local debugging** — debug and fix the failing slice branch, then let the stack flow restack the PRs above it
+- **Separate stack state** — stack metadata lives in `.planning/focus-stacks/`, while slice artifacts stay in `.planning/quick/`
+
+Use for: dependent small features, stepwise migrations, reviewable refactor chains, or bug-fix series that should land as stacked PRs.
+
+```
+/gsd:focus-stack
+> Paste a Markdown list of slices or @stack.md
+```
+
+**Creates:** `.planning/focus-stacks/<stack-id>/STACK.md`, `state.json`
+
+---
+
 ### 6. Repeat → Complete → Next Milestone
 
 ```
@@ -543,6 +575,7 @@ You're never locked in. The system adapts.
 | Command | What it does |
 |---------|--------------|
 | `/gsd:focus [--full] [--discuss]` | Recommended fast path for bounded work (`--full` adds plan-checking and verification, `--discuss` gathers context first) |
+| `/gsd:focus-stack [--base] [--resume] [--restack-only] [--full] [--discuss]` | Deliver several bounded slices as managed stacked PRs with automatic descendant restacking during explicit stack operations |
 | `/gsd:settings` | Configure model profile and workflow agents |
 | `/gsd:set-profile <profile>` | Switch model profile (quality/balanced/budget) |
 | `/gsd:add-todo [desc]` | Capture idea for later |
@@ -612,8 +645,8 @@ Control how GSD handles branches during execution.
 | Setting | Options | Default | What it does |
 |---------|---------|---------|--------------|
 | `git.branching_strategy` | `none`, `phase`, `milestone` | `none` | Branch creation strategy |
-| `git.phase_branch_template` | string | `gsd/phase-{phase}-{slug}` | Template for phase branches |
-| `git.milestone_branch_template` | string | `gsd/{milestone}-{slug}` | Template for milestone branches |
+| `git.phase_branch_template` | string | `feature/phase-{phase}-{slug}` | Template for phase branches |
+| `git.milestone_branch_template` | string | `feature/{milestone}-{slug}` | Template for milestone branches |
 
 **Strategies:**
 - **`none`** — Commits to current branch (default GSD behavior)

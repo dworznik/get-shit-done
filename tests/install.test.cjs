@@ -23,14 +23,14 @@ function runInstaller(args) {
   });
 }
 
-describe('installer exposes focus command across runtimes', () => {
+describe('installer exposes focus commands across runtimes', () => {
   afterEach(() => {
     while (tempDirs.length > 0) {
       fs.rmSync(tempDirs.pop(), { recursive: true, force: true });
     }
   });
 
-  test('installs focus command for Claude and Gemini nested commands', () => {
+  test('installs focus and focus-stack commands for Claude and Gemini nested commands', () => {
     const claudeDir = makeTempDir('gsd-install-claude-');
     const geminiDir = makeTempDir('gsd-install-gemini-');
 
@@ -38,30 +38,40 @@ describe('installer exposes focus command across runtimes', () => {
     runInstaller(['--gemini', '--global', '--config-dir', geminiDir]);
 
     assert.ok(fs.existsSync(path.join(claudeDir, 'commands', 'gsd', 'focus.md')));
+    assert.ok(fs.existsSync(path.join(claudeDir, 'commands', 'gsd', 'focus-stack.md')));
     assert.ok(fs.existsSync(path.join(geminiDir, 'commands', 'gsd', 'focus.toml')));
+    assert.ok(fs.existsSync(path.join(geminiDir, 'commands', 'gsd', 'focus-stack.toml')));
   });
 
-  test('installs focus command for OpenCode flattened commands', () => {
+  test('installs focus and focus-stack commands for OpenCode flattened commands', () => {
     const openCodeDir = makeTempDir('gsd-install-opencode-');
 
     runInstaller(['--opencode', '--global', '--config-dir', openCodeDir]);
 
-    const commandPath = path.join(openCodeDir, 'command', 'gsd-focus.md');
-    assert.ok(fs.existsSync(commandPath), 'OpenCode flattened focus command exists');
+    const focusCommandPath = path.join(openCodeDir, 'command', 'gsd-focus.md');
+    const stackCommandPath = path.join(openCodeDir, 'command', 'gsd-focus-stack.md');
+    assert.ok(fs.existsSync(focusCommandPath), 'OpenCode flattened focus command exists');
+    assert.ok(fs.existsSync(stackCommandPath), 'OpenCode flattened focus-stack command exists');
 
-    const content = fs.readFileSync(commandPath, 'utf8');
-    assert.ok(content.includes('--mode focus'), 'OpenCode command keeps focus-mode delegation');
+    const focusContent = fs.readFileSync(focusCommandPath, 'utf8');
+    const stackContent = fs.readFileSync(stackCommandPath, 'utf8');
+    assert.ok(focusContent.includes('--mode focus'), 'OpenCode focus command keeps focus-mode delegation');
+    assert.ok(stackContent.includes('focus-stack'), 'OpenCode focus-stack command content exists');
   });
 
-  test('installs focus command for Codex as a skill', () => {
+  test('installs focus and focus-stack commands for Codex as skills', () => {
     const codexDir = makeTempDir('gsd-install-codex-');
 
     runInstaller(['--codex', '--global', '--config-dir', codexDir]);
 
-    const skillPath = path.join(codexDir, 'skills', 'gsd-focus', 'SKILL.md');
-    assert.ok(fs.existsSync(skillPath), 'Codex focus skill exists');
+    const focusSkillPath = path.join(codexDir, 'skills', 'gsd-focus', 'SKILL.md');
+    const stackSkillPath = path.join(codexDir, 'skills', 'gsd-focus-stack', 'SKILL.md');
+    assert.ok(fs.existsSync(focusSkillPath), 'Codex focus skill exists');
+    assert.ok(fs.existsSync(stackSkillPath), 'Codex focus-stack skill exists');
 
-    const content = fs.readFileSync(skillPath, 'utf8');
-    assert.ok(content.includes('$ARGUMENTS') || content.includes('Focus'), 'Codex focus skill has converted command content');
+    const focusContent = fs.readFileSync(focusSkillPath, 'utf8');
+    const stackContent = fs.readFileSync(stackSkillPath, 'utf8');
+    assert.ok(focusContent.includes('$ARGUMENTS') || focusContent.includes('Focus'), 'Codex focus skill has converted command content');
+    assert.ok(stackContent.includes('$ARGUMENTS') || stackContent.includes('focus-stack'), 'Codex focus-stack skill has converted command content');
   });
 });

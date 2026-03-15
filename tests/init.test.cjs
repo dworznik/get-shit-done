@@ -6,7 +6,7 @@ const { test, describe, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
-const { runGsdTools, createTempProject, cleanup } = require('./helpers.cjs');
+const { runGsdTools, createTempProject, createTempGitProject, cleanup } = require('./helpers.cjs');
 
 describe('init commands', () => {
   let tmpDir;
@@ -63,6 +63,29 @@ describe('init commands', () => {
     assert.strictEqual(output.roadmap_path, '.planning/ROADMAP.md');
     assert.strictEqual(output.project_path, '.planning/PROJECT.md');
     assert.strictEqual(output.config_path, '.planning/config.json');
+  });
+
+  test('init focus-stack returns stack paths and git metadata', () => {
+    cleanup(tmpDir);
+    tmpDir = createTempGitProject();
+    fs.writeFileSync(path.join(tmpDir, '.planning', 'ROADMAP.md'), '# Roadmap\n');
+
+    const result = runGsdTools(['init', 'focus-stack', 'Add JSON progress output'], tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+
+    const output = JSON.parse(result.output);
+    assert.ok(output.stack_id, 'stack_id should be present');
+    assert.strictEqual(output.stack_slug, 'add-json-progress-output');
+    assert.strictEqual(output.focus_stack_dir, '.planning/focus-stacks');
+    assert.ok(output.stack_dir.startsWith('.planning/focus-stacks/'));
+    assert.ok(output.state_path.endsWith('/state.json'));
+    assert.ok(output.stack_doc_path.endsWith('/STACK.md'));
+    assert.strictEqual(output.branch_prefix, 'feature/');
+    assert.strictEqual(output.git_available, true);
+    assert.strictEqual(typeof output.git_status_clean, 'boolean');
+    assert.strictEqual(output.current_branch === 'master' || output.current_branch === 'main', true);
+    assert.strictEqual(typeof output.gh_available, 'boolean');
+    assert.strictEqual(typeof output.gh_authenticated, 'boolean');
   });
 
   test('init phase-op returns core and optional phase file paths', () => {
@@ -867,4 +890,3 @@ describe('cmdInitNewMilestone', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 // roadmap analyze command
 // ─────────────────────────────────────────────────────────────────────────────
-

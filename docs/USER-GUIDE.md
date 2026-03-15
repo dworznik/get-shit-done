@@ -228,6 +228,7 @@ enabled, or after `/gsd:audit-milestone` surfaces Nyquist compliance gaps.
 |---------|---------|-------------|
 | `/gsd:map-codebase` | Analyze existing codebase | Before `/gsd:new-project` on existing code |
 | `/gsd:focus` | Recommended fast path for bounded work | Small features, precise fixes, focused refactors |
+| `/gsd:focus-stack` | Managed stacked PR flow for bounded work | Several small dependent slices, reviewable change chains |
 | `/gsd:quick` | Ad-hoc task with GSD guarantees | Bug fixes, small features, config changes |
 | `/gsd:debug [desc]` | Systematic debugging with persistent state | When something breaks |
 | `/gsd:add-todo [desc]` | Capture an idea for later | Think of something during a session |
@@ -261,8 +262,8 @@ GSD stores project settings in `.planning/config.json`. Configure during `/gsd:n
   },
   "git": {
     "branching_strategy": "none",
-    "phase_branch_template": "gsd/phase-{phase}-{slug}",
-    "milestone_branch_template": "gsd/{milestone}-{slug}"
+    "phase_branch_template": "feature/phase-{phase}-{slug}",
+    "milestone_branch_template": "feature/{milestone}-{slug}"
   }
 }
 ```
@@ -294,15 +295,15 @@ GSD stores project settings in `.planning/config.json`. Configure during `/gsd:n
 | `workflow.nyquist_validation` | `true`, `false` | `true` | Validation architecture research during plan-phase; 8th plan-check dimension |
 
 Disable these to speed up phases in familiar domains or when conserving tokens.
-For narrow delivery work, prefer `/gsd:focus` rather than turning global checks off first.
+For narrow delivery work, prefer `/gsd:focus` or `/gsd:focus-stack` rather than turning global checks off first.
 
 ### Git Branching
 
 | Setting | Options | Default | What it Controls |
 |---------|---------|---------|------------------|
 | `git.branching_strategy` | `none`, `phase`, `milestone` | `none` | When and how branches are created |
-| `git.phase_branch_template` | Template string | `gsd/phase-{phase}-{slug}` | Branch name for phase strategy |
-| `git.milestone_branch_template` | Template string | `gsd/{milestone}-{slug}` | Branch name for milestone strategy |
+| `git.phase_branch_template` | Template string | `feature/phase-{phase}-{slug}` | Branch name for phase strategy |
+| `git.milestone_branch_template` | Template string | `feature/{milestone}-{slug}` | Branch name for milestone strategy |
 
 **Branching strategies explained:**
 

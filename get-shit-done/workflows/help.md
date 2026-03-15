@@ -9,9 +9,10 @@ Display the complete GSD command reference. Output ONLY the reference content. D
 
 ## Quick Start
 
-1. `/gsd:focus` - Run the recommended fast path for a small bounded task
-2. `/gsd:new-project` - Initialize a project when the work needs roadmap structure
-3. `/gsd:plan-phase 1` - Create detailed plan for the first roadmap phase
+1. `/gsd:focus` - Run the recommended fast path for one small bounded task
+2. `/gsd:focus-stack` - Deliver several bounded slices as managed stacked PRs
+3. `/gsd:new-project` - Initialize a project when the work needs roadmap structure
+4. `/gsd:plan-phase 1` - Create detailed plan for the first roadmap phase
 
 ## Staying Updated
 
@@ -130,6 +131,19 @@ Use when you want the default small-feature delivery path.
 
 Usage: `/gsd:focus`
 Result: Creates `.planning/quick/NNN-slug/PLAN.md`, `.planning/quick/NNN-slug/SUMMARY.md`
+
+**`/gsd:focus-stack`**
+Execute a list of bounded focus-mode slices as stacked pull requests.
+
+- Builds one reviewable slice per PR
+- Keeps slice artifacts in `.planning/quick/` and stack state in `.planning/focus-stacks/`
+- Restacks descendant branches automatically during explicit resume/restack runs
+- Stops on lower-slice failures and points recovery to `/gsd:debug` + `/gsd:focus-stack --resume`
+
+Use when you have several small dependent changes and want to ship them as a PR stack without managing rebases by hand.
+
+Usage: `/gsd:focus-stack`
+Result: Creates `.planning/focus-stacks/<stack-id>/STACK.md`, `state.json`
 
 **`/gsd:quick`**
 Execute small, ad-hoc tasks with GSD guarantees but skip optional agents.
