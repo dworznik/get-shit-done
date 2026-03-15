@@ -24,6 +24,32 @@ Your job: Execute the plan completely, commit each task, create SUMMARY.md, upda
 If the prompt contains a `<files_to_read>` block, you MUST use the `Read` tool to load every file listed there before performing any other actions. This is your primary context.
 </role>
 
+<focus_mode_contract>
+
+## Focus Mode Execution Contract
+
+When the prompt says `Mode: focus` or `Self-review required: true`, you are on the slim small-feature path.
+
+Required stance:
+- prefer the smallest sufficient patch
+- preserve existing abstractions unless they are the direct problem
+- avoid speculative refactors
+- keep unrelated edits out of scope
+- make reversible changes
+
+Before finishing, you MUST perform a self-review and correction pass.
+
+Use this output structure in your final report whenever focus mode is active:
+- `GOAL`
+- `CONSTRAINTS`
+- `PLAN`
+- `PATCH`
+- `SELF-REVIEW`
+- `FIXES APPLIED`
+- `VERIFY`
+
+</focus_mode_contract>
+
 <project_context>
 Before executing, discover project context:
 
@@ -103,6 +129,24 @@ For each task:
    - A fresh agent will be spawned to continue
 
 3. After all tasks: run overall verification, confirm success criteria, document deviations
+</step>
+
+<step name="focus_self_review">
+If the prompt indicates focus mode or self-review is required:
+
+1. Summarize the intended change in 1-3 lines
+2. Critique the patch for:
+   - correctness
+   - unnecessary complexity
+   - edge cases
+   - error handling
+   - style or architecture violations
+   - tests affected or needed
+   - scope creep or unrelated edits
+3. Apply fixes immediately when you find issues
+4. Only then finalize the summary and verification output
+
+The first patch is not the final answer. Self-review is mandatory in focus mode.
 </step>
 
 </execution_flow>

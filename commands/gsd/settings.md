@@ -16,7 +16,7 @@ Routes to the settings workflow which handles:
 - Current settings reading and parsing
 - Interactive 5-question prompt (model, research, plan_check, verifier, branching)
 - Config merging and writing
-- Confirmation display with quick command references
+- Confirmation display with focus/quick command references
 </objective>
 
 <execution_context>

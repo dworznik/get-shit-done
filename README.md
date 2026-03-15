@@ -330,6 +330,35 @@ If everything passes, you move on. If something's broken, you don't manually deb
 
 ---
 
+### Focus Mode
+
+```
+/gsd:focus
+```
+
+**Recommended for small features, precise fixes, and bounded refactors.**
+
+Focus mode keeps the quick-task substrate, but makes the default delivery loop explicit:
+
+```text
+spec -> implement -> self-review -> verify
+```
+
+- **Bounded by default** — One narrow change set, minimal diffs, no unrelated redesign
+- **Risk-based escalation** — Adds heavier checks only when the task is risky, unfamiliar, or too large
+- **Separate tracking** — Lives in `.planning/quick/`, not roadmap phases
+
+Use for: small features, focused refactors, bug fixes, test additions, config/tooling changes.
+
+```
+/gsd:focus
+> What do you want to do? "Add dark mode toggle to settings"
+```
+
+**Creates:** `.planning/quick/YYMMDD-xxx-add-dark-mode-toggle/PLAN.md`, `SUMMARY.md`
+
+---
+
 ### 6. Repeat → Complete → Next Milestone
 
 ```
@@ -360,7 +389,7 @@ Then `/gsd:new-milestone` starts the next version — same flow as `new-project`
 /gsd:quick
 ```
 
-**For ad-hoc tasks that don't need full planning.**
+**For ad-hoc tasks that need the lightest possible path.**
 
 Quick mode gives you GSD guarantees (atomic commits, state tracking) with a faster path:
 
@@ -368,7 +397,7 @@ Quick mode gives you GSD guarantees (atomic commits, state tracking) with a fast
 - **Skips optional steps** — No research, no plan checker, no verifier
 - **Separate tracking** — Lives in `.planning/quick/`, not phases
 
-Use for: bug fixes, small features, config changes, one-off tasks.
+Use for: obvious one-off tasks, tiny fixes, config changes, or when you do not want the extra focus-mode structure.
 
 ```
 /gsd:quick
@@ -513,6 +542,7 @@ You're never locked in. The system adapts.
 
 | Command | What it does |
 |---------|--------------|
+| `/gsd:focus [--full] [--discuss]` | Recommended fast path for bounded work (`--full` adds plan-checking and verification, `--discuss` gathers context first) |
 | `/gsd:settings` | Configure model profile and workflow agents |
 | `/gsd:set-profile <profile>` | Switch model profile (quality/balanced/budget) |
 | `/gsd:add-todo [desc]` | Capture idea for later |
@@ -555,7 +585,7 @@ Or configure via `/gsd:settings`.
 
 ### Workflow Agents
 
-These spawn additional agents during planning/execution. They improve quality but add tokens and time.
+These spawn additional agents during planning/execution. They improve quality but add tokens and time. Treat them as optional levers for broader work; for bounded tasks, start with `/gsd:focus`.
 
 | Setting | Default | What it does |
 |---------|---------|--------------|

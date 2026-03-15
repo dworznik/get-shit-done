@@ -1,5 +1,7 @@
 <purpose>
 Interactive configuration of GSD workflow agents (research, plan_check, verifier) and model profile selection via multi-question prompt. Updates .planning/config.json with user preferences. Optionally saves settings as global defaults (~/.gsd/defaults.json) for future projects.
+
+These toggles are optional quality levers for broader work. For bounded small-feature delivery, prefer `/gsd:focus` as the default fast path.
 </purpose>
 
 <required_reading>
@@ -198,6 +200,8 @@ Display:
 These settings apply to future /gsd:plan-phase and /gsd:execute-phase runs.
 
 Quick commands:
+- /gsd:focus — recommended fast path for a narrow feature or fix
+- /gsd:quick — lowest-ceremony ad-hoc path
 - /gsd:set-profile <profile> — switch model profile
 - /gsd:plan-phase --research — force research
 - /gsd:plan-phase --skip-research — skip research
