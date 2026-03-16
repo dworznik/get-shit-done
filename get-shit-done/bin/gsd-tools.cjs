@@ -29,9 +29,12 @@
  *   config-ensure-section              Initialize .planning/config.json
  *   history-digest                     Aggregate all SUMMARY.md data
  *   summary-extract <path> [--fields]  Extract structured data from SUMMARY.md
- *   supervisor-bundle <dir> --stage    Build supervisor input bundle for quick/focus
+ *   supervisor-bundle <dir> --stage    Build supervisor input bundle
+ *     [--kind quick|phase]
  *   supervisor-launch <dir> --stage    Launch Codex supervisor via configured transport
+ *     [--kind quick|phase]
  *   supervisor-wait <dir> --stage      Wait for Codex supervisor completion
+ *     [--kind quick|phase]
  *   supervisor-findings <path>         Normalize supervisor findings JSON
  *   state-snapshot                     Structured parse of STATE.md
  *   phase-plan-index <phase>           Index plans with waves and status
@@ -778,24 +781,30 @@ async function runCommand(command, args, cwd, raw) {
     case 'supervisor-bundle': {
       const quickDir = args[1];
       const stageIndex = args.indexOf('--stage');
+      const kindIndex = args.indexOf('--kind');
       const stage = stageIndex !== -1 ? args[stageIndex + 1] : null;
-      commands.cmdSupervisorBundle(cwd, quickDir, stage, raw);
+      const kind = kindIndex !== -1 ? args[kindIndex + 1] : 'quick';
+      commands.cmdSupervisorBundle(cwd, quickDir, stage, raw, kind);
       break;
     }
 
     case 'supervisor-launch': {
       const quickDir = args[1];
       const stageIndex = args.indexOf('--stage');
+      const kindIndex = args.indexOf('--kind');
       const stage = stageIndex !== -1 ? args[stageIndex + 1] : null;
-      commands.cmdSupervisorLaunch(cwd, quickDir, stage, raw);
+      const kind = kindIndex !== -1 ? args[kindIndex + 1] : 'quick';
+      commands.cmdSupervisorLaunch(cwd, quickDir, stage, raw, kind);
       break;
     }
 
     case 'supervisor-wait': {
       const quickDir = args[1];
       const stageIndex = args.indexOf('--stage');
+      const kindIndex = args.indexOf('--kind');
       const stage = stageIndex !== -1 ? args[stageIndex + 1] : null;
-      commands.cmdSupervisorWait(cwd, quickDir, stage, raw);
+      const kind = kindIndex !== -1 ? args[kindIndex + 1] : 'quick';
+      commands.cmdSupervisorWait(cwd, quickDir, stage, raw, kind);
       break;
     }
 

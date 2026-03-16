@@ -34,6 +34,7 @@ Parse current values (default to `true` if not present):
 - `workflow.nyquist_validation` — validation architecture research during plan-phase (default: true if absent)
 - `workflow.ui_phase` — generate UI-SPEC.md design contracts for frontend phases (default: true if absent)
 - `workflow.ui_safety_gate` — prompt to run /gsd:ui-phase before planning frontend phases (default: true if absent)
+- `workflow.codex_supervisor` / `workflow.codex_supervisor_phase` — optional Codex supervisor gates for fast-path and phase workflows (manual `config-set`, not part of this interactive form)
 - `model_profile` — which model each agent uses (default: `balanced`)
 - `git.branching_strategy` — branching approach (default: `"none"`)
 </step>
@@ -273,6 +274,7 @@ Quick commands:
 - /gsd:plan-phase --research — force research
 - /gsd:plan-phase --skip-research — skip research
 - /gsd:plan-phase --skip-verify — skip plan check
+- `node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" config-set workflow.codex_supervisor_phase true` — enable Codex supervisor gates for roadmap phases
 ```
 </step>
 

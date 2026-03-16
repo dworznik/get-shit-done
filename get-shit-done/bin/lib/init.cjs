@@ -67,6 +67,8 @@ function cmdInitExecutePhase(cwd, phase, raw) {
   }
 
   const config = loadConfig(cwd);
+  const runtime = detectRuntimeContext();
+  const supervisorTransport = resolveCodexSupervisorTransport(config, runtime);
   let phaseInfo = findPhaseInternal(cwd, phase);
   const milestone = getMilestoneInfo(cwd);
 
@@ -110,6 +112,17 @@ function cmdInitExecutePhase(cwd, phase, raw) {
     phase_branch_template: config.phase_branch_template,
     milestone_branch_template: config.milestone_branch_template,
     verifier_enabled: config.verifier,
+    codex_supervisor_phase_enabled: config.codex_supervisor_phase,
+    runtime_context: runtime,
+    codex_supervisor_transport_configured: supervisorTransport.configured,
+    codex_supervisor_transport: supervisorTransport.resolved,
+    codex_supervisor_transport_error: supervisorTransport.error,
+    codex_launch_command: config.codex_launch_command,
+    codex_boot_delay_ms: config.codex_boot_delay_ms,
+    codex_supervisor_timeout_seconds: config.codex_supervisor_timeout_seconds,
+    codex_supervisor_poll_ms: config.codex_supervisor_poll_ms,
+    codex_keep_window_on_failure: config.codex_keep_window_on_failure,
+    codex_keep_window_on_success: config.codex_keep_window_on_success,
 
     // Phase info
     phase_found: !!phaseInfo,
@@ -152,6 +165,25 @@ function cmdInitExecutePhase(cwd, phase, raw) {
     config_path: toPosixPath(path.relative(cwd, path.join(planningDir(cwd), 'config.json'))),
   };
 
+  if (phaseInfo?.directory) {
+    const phaseDirFull = path.join(cwd, phaseInfo.directory);
+    try {
+      const files = fs.readdirSync(phaseDirFull);
+      const contextFile = files.find(f => f.endsWith('-CONTEXT.md') || f === 'CONTEXT.md');
+      if (contextFile) result.context_path = toPosixPath(path.join(phaseInfo.directory, contextFile));
+      const researchFile = files.find(f => f.endsWith('-RESEARCH.md') || f === 'RESEARCH.md');
+      if (researchFile) result.research_path = toPosixPath(path.join(phaseInfo.directory, researchFile));
+      const importFile = files.find(f => f.endsWith('-IMPORT.md') || f === 'IMPORT.md');
+      if (importFile) result.import_path = toPosixPath(path.join(phaseInfo.directory, importFile));
+      const validationFile = files.find(f => f.endsWith('-VALIDATION.md') || f === 'VALIDATION.md');
+      if (validationFile) result.validation_path = toPosixPath(path.join(phaseInfo.directory, validationFile));
+      const verificationFile = files.find(f => f.endsWith('-VERIFICATION.md') || f === 'VERIFICATION.md');
+      if (verificationFile) result.verification_path = toPosixPath(path.join(phaseInfo.directory, verificationFile));
+      const uatFile = files.find(f => f.endsWith('-UAT.md') || f === 'UAT.md');
+      if (uatFile) result.uat_path = toPosixPath(path.join(phaseInfo.directory, uatFile));
+    } catch {}
+  }
+
   output(withProjectRoot(cwd, result), raw);
 }
 
@@ -161,6 +193,8 @@ function cmdInitPlanPhase(cwd, phase, raw) {
   }
 
   const config = loadConfig(cwd);
+  const runtime = detectRuntimeContext();
+  const supervisorTransport = resolveCodexSupervisorTransport(config, runtime);
   let phaseInfo = findPhaseInternal(cwd, phase);
 
   const roadmapPhase = getRoadmapPhaseInternal(cwd, phase);
@@ -201,6 +235,17 @@ function cmdInitPlanPhase(cwd, phase, raw) {
     nyquist_validation_enabled: config.nyquist_validation,
     commit_docs: config.commit_docs,
     text_mode: config.text_mode,
+    codex_supervisor_phase_enabled: config.codex_supervisor_phase,
+    runtime_context: runtime,
+    codex_supervisor_transport_configured: supervisorTransport.configured,
+    codex_supervisor_transport: supervisorTransport.resolved,
+    codex_supervisor_transport_error: supervisorTransport.error,
+    codex_launch_command: config.codex_launch_command,
+    codex_boot_delay_ms: config.codex_boot_delay_ms,
+    codex_supervisor_timeout_seconds: config.codex_supervisor_timeout_seconds,
+    codex_supervisor_poll_ms: config.codex_supervisor_poll_ms,
+    codex_keep_window_on_failure: config.codex_keep_window_on_failure,
+    codex_keep_window_on_success: config.codex_keep_window_on_success,
 
     // Phase info
     phase_found: !!phaseInfo,
@@ -244,6 +289,10 @@ function cmdInitPlanPhase(cwd, phase, raw) {
       const importFile = files.find(f => f.endsWith('-IMPORT.md') || f === 'IMPORT.md');
       if (importFile) {
         result.import_path = toPosixPath(path.join(phaseInfo.directory, importFile));
+      }
+      const validationFile = files.find(f => f.endsWith('-VALIDATION.md') || f === 'VALIDATION.md');
+      if (validationFile) {
+        result.validation_path = toPosixPath(path.join(phaseInfo.directory, validationFile));
       }
       const verificationFile = files.find(f => f.endsWith('-VERIFICATION.md') || f === 'VERIFICATION.md');
       if (verificationFile) {

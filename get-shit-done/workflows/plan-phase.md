@@ -26,7 +26,7 @@ INIT=$(node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" init plan-phase "$PH
 if [[ "$INIT" == @file:* ]]; then INIT=$(cat "${INIT#@file:}"); fi
 ```
 
-Parse JSON for: `researcher_model`, `planner_model`, `checker_model`, `research_enabled`, `plan_checker_enabled`, `nyquist_validation_enabled`, `commit_docs`, `text_mode`, `phase_found`, `phase_dir`, `phase_number`, `phase_name`, `phase_slug`, `padded_phase`, `has_research`, `has_context`, `has_reviews`, `has_plans`, `plan_count`, `planning_exists`, `roadmap_exists`, `phase_req_ids`, `import_path`.
+Parse JSON for: `researcher_model`, `planner_model`, `checker_model`, `research_enabled`, `plan_checker_enabled`, `nyquist_validation_enabled`, `commit_docs`, `text_mode`, `phase_found`, `phase_dir`, `phase_number`, `phase_name`, `phase_slug`, `padded_phase`, `has_research`, `has_context`, `has_reviews`, `has_plans`, `plan_count`, `planning_exists`, `roadmap_exists`, `phase_req_ids`, `import_path`, `validation_path`, `codex_supervisor_phase_enabled`, `runtime_context`, `codex_supervisor_transport`, `codex_supervisor_transport_error`, `codex_launch_command`, `codex_boot_delay_ms`, `codex_supervisor_timeout_seconds`, `codex_supervisor_poll_ms`.
 
 **File paths (for <files_to_read> blocks):** `state_path`, `roadmap_path`, `requirements_path`, `context_path`, `import_path`, `research_path`, `verification_path`, `uat_path`, `reviews_path`. These are null if files don't exist.
 
@@ -441,6 +441,7 @@ UAT_PATH=$(_gsd_field "$INIT" uat_path)
 CONTEXT_PATH=$(_gsd_field "$INIT" context_path)
 REVIEWS_PATH=$(_gsd_field "$INIT" reviews_path)
 IMPORT_PATH=$(_gsd_field "$INIT" import_path)
+VALIDATION_PATH=$(_gsd_field "$INIT" validation_path)
 ```
 
 ## 7.5. Verify Nyquist Artifacts
@@ -719,6 +720,82 @@ Options:
 ```
 
 If `TEXT_MODE` is true, present as a plain-text numbered list (options already shown in the block above). Otherwise use AskUserQuestion to present the options.
+
+## 13.5. Codex Supervisor Phase Plan Gate
+
+Run this step only when `codex_supervisor_phase_enabled` is true and the plan-check result is effectively passed.
+
+Write or update `${PHASE_DIR}/PHASE_RUN_MANIFEST.json`:
+```bash
+PHASE_RUN_MANIFEST="${PHASE_DIR}/PHASE_RUN_MANIFEST.json"
+PHASE_DIR="$PHASE_DIR" PHASE_RUN_MANIFEST="$PHASE_RUN_MANIFEST" PHASE_NUMBER="$PHASE" PHASE_NAME="$PHASE_NAME" PHASE_SLUG="$PHASE_SLUG" CONTEXT_PATH="$CONTEXT_PATH" RESEARCH_PATH="$RESEARCH_PATH" IMPORT_PATH="$IMPORT_PATH" VALIDATION_PATH="$VALIDATION_PATH" VERIFICATION_PATH="$VERIFICATION_PATH" UAT_PATH="$UAT_PATH" SUPERVISOR_RUNTIME="${runtime_context}" SUPERVISOR_TRANSPORT="${codex_supervisor_transport}" node <<'NODE'
+const fs = require('fs');
+const manifestPath = process.env.PHASE_RUN_MANIFEST;
+const existing = fs.existsSync(manifestPath) ? JSON.parse(fs.readFileSync(manifestPath, 'utf8')) : {};
+const manifest = {
+  run_id: existing.run_id || `phase-${process.env.PHASE_NUMBER}`,
+  kind: 'phase',
+  phase_number: process.env.PHASE_NUMBER,
+  phase_name: process.env.PHASE_NAME,
+  phase_slug: process.env.PHASE_SLUG,
+  phase_dir: process.env.PHASE_DIR,
+  context_path: process.env.CONTEXT_PATH || null,
+  research_path: process.env.RESEARCH_PATH || null,
+  import_path: process.env.IMPORT_PATH || null,
+  validation_path: process.env.VALIDATION_PATH || null,
+  verification_path: process.env.VERIFICATION_PATH || null,
+  uat_path: process.env.UAT_PATH || null,
+  planner_status: 'planned',
+  checker_status: 'passed',
+  execution_status: existing.execution_status || 'pending',
+  verification_status: existing.verification_status || 'pending',
+  supervisor_runtime: process.env.SUPERVISOR_RUNTIME || null,
+  supervisor_transport: process.env.SUPERVISOR_TRANSPORT || null,
+  supervisor_plan_tmux_target: existing.supervisor_plan_tmux_target || null,
+  supervisor_execute_tmux_target: existing.supervisor_execute_tmux_target || null,
+  supervisor_plan_status: 'pending',
+  supervisor_execute_status: existing.supervisor_execute_status || 'pending',
+  final_status: 'planned',
+};
+fs.writeFileSync(manifestPath, JSON.stringify({ ...existing, ...manifest }, null, 2));
+NODE
+```
+
+Build the phase plan bundle:
+```bash
+PHASE_PLAN_BUNDLE=$(node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" supervisor-bundle "$PHASE_DIR" --kind phase --stage plan --raw)
+```
+
+If `codex_supervisor_transport` is `unavailable`, stop with `codex_supervisor_transport_error`.
+
+If `codex_supervisor_transport` is `direct`, invoke:
+```text
+Skill(skill="gsd:supervisor", args="--bundle ${PHASE_PLAN_BUNDLE} --stage plan --kind phase")
+```
+
+If `codex_supervisor_transport` is `tmux`, launch and wait:
+```bash
+SUPERVISOR_PLAN_LAUNCH=$(node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" supervisor-launch "$PHASE_DIR" --kind phase --stage plan)
+if [[ "$SUPERVISOR_PLAN_LAUNCH" == @file:* ]]; then SUPERVISOR_PLAN_LAUNCH=$(cat "${SUPERVISOR_PLAN_LAUNCH#@file:}"); fi
+SUPERVISOR_PLAN_TARGET=$(printf '%s' "$SUPERVISOR_PLAN_LAUNCH" | node -e 'const fs = require("fs"); const data = JSON.parse(fs.readFileSync(0, "utf8")); process.stdout.write(data.tmux_target || "");')
+node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" supervisor-wait "$PHASE_DIR" --kind phase --stage plan
+```
+
+After the supervisor completes:
+- verify `${PHASE_DIR}/PHASE-SUPERVISOR-PLAN-FINDINGS.json` exists
+- read findings and state:
+```bash
+SUPERVISOR_PLAN=$(node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" supervisor-findings "${PHASE_DIR}/PHASE-SUPERVISOR-PLAN-FINDINGS.json")
+if [[ "$SUPERVISOR_PLAN" == @file:* ]]; then SUPERVISOR_PLAN=$(cat "${SUPERVISOR_PLAN#@file:}"); fi
+SUPERVISOR_PLAN_STATE=$(node -e 'const fs = require("fs"); const data = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); process.stdout.write(data.state || "failed");' "${PHASE_DIR}/PHASE-SUPERVISOR-PLAN-STATUS.json")
+```
+- update `PHASE_RUN_MANIFEST.json` `supervisor_plan_status`
+- when tmux transport ran, also update `supervisor_plan_tmux_target`
+
+Gate behavior:
+- `blocked`, `failed`, or `timeout` → stop before offering `/gsd:execute-phase`
+- `warnings` → continue and keep the warnings recorded in the manifest
+- `passed` → continue normally
 
 ## 14. Present Final Status
 

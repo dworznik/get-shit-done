@@ -65,7 +65,7 @@ INIT=$(node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" init execute-phase "
 if [[ "$INIT" == @file:* ]]; then INIT=$(cat "${INIT#@file:}"); fi
 ```
 
-Parse JSON for: `executor_model`, `verifier_model`, `commit_docs`, `parallelization`, `branching_strategy`, `branch_name`, `phase_found`, `phase_dir`, `phase_number`, `phase_name`, `phase_slug`, `plans`, `incomplete_plans`, `plan_count`, `incomplete_count`, `state_exists`, `roadmap_exists`, `phase_req_ids`.
+Parse JSON for: `executor_model`, `verifier_model`, `commit_docs`, `parallelization`, `branching_strategy`, `branch_name`, `phase_found`, `phase_dir`, `phase_number`, `phase_name`, `phase_slug`, `plans`, `incomplete_plans`, `plan_count`, `incomplete_count`, `state_exists`, `roadmap_exists`, `phase_req_ids`, `context_path`, `research_path`, `import_path`, `validation_path`, `verification_path`, `uat_path`, `codex_supervisor_phase_enabled`, `runtime_context`, `codex_supervisor_transport`, `codex_supervisor_transport_error`, `codex_launch_command`, `codex_boot_delay_ms`, `codex_supervisor_timeout_seconds`, `codex_supervisor_poll_ms`.
 
 **If `phase_found` is false:** Error — phase directory not found.
 **If `plan_count` is 0:** Error — no plans found in phase.
@@ -161,6 +161,46 @@ Report: "Found {plan_count} plans in {phase_dir} ({incomplete_count} incomplete)
 node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" state begin-phase --phase "${PHASE_NUMBER}" --name "${PHASE_NAME}" --plans "${PLAN_COUNT}"
 ```
 This updates Status, Last Activity, Current focus, Current Position, and plan counts in STATE.md so frontmatter and body text reflect the active phase immediately.
+</step>
+
+<step name="initialize_phase_manifest">
+Run this step only when `codex_supervisor_phase_enabled` is true.
+
+Create or update `${PHASE_DIR}/PHASE_RUN_MANIFEST.json`:
+```bash
+PHASE_RUN_MANIFEST="${PHASE_DIR}/PHASE_RUN_MANIFEST.json"
+PHASE_DIR="$PHASE_DIR" PHASE_RUN_MANIFEST="$PHASE_RUN_MANIFEST" PHASE_NUMBER="$PHASE_NUMBER" PHASE_NAME="$PHASE_NAME" PHASE_SLUG="$PHASE_SLUG" CONTEXT_PATH="$CONTEXT_PATH" RESEARCH_PATH="$RESEARCH_PATH" IMPORT_PATH="$IMPORT_PATH" VALIDATION_PATH="$VALIDATION_PATH" VERIFICATION_PATH="$VERIFICATION_PATH" UAT_PATH="$UAT_PATH" SUPERVISOR_RUNTIME="${runtime_context}" SUPERVISOR_TRANSPORT="${codex_supervisor_transport}" node <<'NODE'
+const fs = require('fs');
+const manifestPath = process.env.PHASE_RUN_MANIFEST;
+const existing = fs.existsSync(manifestPath) ? JSON.parse(fs.readFileSync(manifestPath, 'utf8')) : {};
+const manifest = {
+  run_id: existing.run_id || `phase-${process.env.PHASE_NUMBER}`,
+  kind: 'phase',
+  phase_number: process.env.PHASE_NUMBER,
+  phase_name: process.env.PHASE_NAME,
+  phase_slug: process.env.PHASE_SLUG,
+  phase_dir: process.env.PHASE_DIR,
+  context_path: process.env.CONTEXT_PATH || existing.context_path || null,
+  research_path: process.env.RESEARCH_PATH || existing.research_path || null,
+  import_path: process.env.IMPORT_PATH || existing.import_path || null,
+  validation_path: process.env.VALIDATION_PATH || existing.validation_path || null,
+  verification_path: process.env.VERIFICATION_PATH || existing.verification_path || null,
+  uat_path: process.env.UAT_PATH || existing.uat_path || null,
+  planner_status: existing.planner_status || 'planned',
+  checker_status: existing.checker_status || 'passed',
+  execution_status: 'running',
+  verification_status: existing.verification_status || 'pending',
+  supervisor_runtime: process.env.SUPERVISOR_RUNTIME || null,
+  supervisor_transport: process.env.SUPERVISOR_TRANSPORT || null,
+  supervisor_plan_tmux_target: existing.supervisor_plan_tmux_target || null,
+  supervisor_execute_tmux_target: existing.supervisor_execute_tmux_target || null,
+  supervisor_plan_status: existing.supervisor_plan_status || 'pending',
+  supervisor_execute_status: existing.supervisor_execute_status || 'pending',
+  final_status: 'executing',
+};
+fs.writeFileSync(manifestPath, JSON.stringify({ ...existing, ...manifest }, null, 2));
+NODE
+```
 </step>
 
 <step name="discover_and_group_plans">
@@ -689,6 +729,60 @@ Also: `/gsd:verify-work {X} ${GSD_WS}` — manual testing first
 ```
 
 Gap closure cycle: `/gsd:plan-phase {X} --gaps ${GSD_WS}` reads VERIFICATION.md → creates gap plans with `gap_closure: true` → user runs `/gsd:execute-phase {X} --gaps-only ${GSD_WS}` → verifier re-runs.
+</step>
+
+<step name="codex_supervisor_execute_gate">
+Run this step only when all of these are true:
+- `codex_supervisor_phase_enabled` is true
+- phase verification is effectively passed
+- no gap-closure path is active
+
+Effective verification pass means:
+- verifier returned `passed`, or
+- verifier returned `human_needed` and the user approved the required manual checks
+
+If verifier returned `gaps_found`, skip this step and preserve the existing gap-closure route.
+
+Update `${PHASE_DIR}/PHASE_RUN_MANIFEST.json` with:
+- `execution_status: completed`
+- `verification_status: passed` or `human_needed-approved`
+- `final_status: verified`
+
+Build the execute bundle:
+```bash
+PHASE_EXECUTE_BUNDLE=$(node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" supervisor-bundle "$PHASE_DIR" --kind phase --stage execute --raw)
+```
+
+If `codex_supervisor_transport` is `unavailable`, stop with `codex_supervisor_transport_error`.
+
+If `codex_supervisor_transport` is `direct`, invoke:
+```text
+Skill(skill="gsd:supervisor", args="--bundle ${PHASE_EXECUTE_BUNDLE} --stage execute --kind phase")
+```
+
+If `codex_supervisor_transport` is `tmux`, launch and wait:
+```bash
+SUPERVISOR_EXECUTE_LAUNCH=$(node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" supervisor-launch "$PHASE_DIR" --kind phase --stage execute)
+if [[ "$SUPERVISOR_EXECUTE_LAUNCH" == @file:* ]]; then SUPERVISOR_EXECUTE_LAUNCH=$(cat "${SUPERVISOR_EXECUTE_LAUNCH#@file:}"); fi
+SUPERVISOR_EXECUTE_TARGET=$(printf '%s' "$SUPERVISOR_EXECUTE_LAUNCH" | node -e 'const fs = require("fs"); const data = JSON.parse(fs.readFileSync(0, "utf8")); process.stdout.write(data.tmux_target || "");')
+node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" supervisor-wait "$PHASE_DIR" --kind phase --stage execute
+```
+
+After the supervisor completes:
+- verify `${PHASE_DIR}/PHASE-SUPERVISOR-EXECUTE-FINDINGS.json` exists
+- read findings and state:
+```bash
+SUPERVISOR_EXECUTE=$(node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" supervisor-findings "${PHASE_DIR}/PHASE-SUPERVISOR-EXECUTE-FINDINGS.json")
+if [[ "$SUPERVISOR_EXECUTE" == @file:* ]]; then SUPERVISOR_EXECUTE=$(cat "${SUPERVISOR_EXECUTE#@file:}"); fi
+SUPERVISOR_EXECUTE_STATE=$(node -e 'const fs = require("fs"); const data = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); process.stdout.write(data.state || "failed");' "${PHASE_DIR}/PHASE-SUPERVISOR-EXECUTE-STATUS.json")
+```
+- update `PHASE_RUN_MANIFEST.json` `supervisor_execute_status`
+- when tmux transport ran, also update `supervisor_execute_tmux_target`
+
+Gate behavior:
+- `blocked`, `failed`, or `timeout` → stop before `phase complete`, before ROADMAP/STATE/REQUIREMENTS updates, and before transition/auto-advance
+- `warnings` → continue but keep findings recorded in the manifest
+- `passed` → continue normally
 </step>
 
 <step name="update_roadmap">

@@ -58,6 +58,7 @@ describe('config-ensure-section command', () => {
     assert.strictEqual(typeof config.workflow.verifier, 'boolean');
     assert.strictEqual(typeof config.workflow.nyquist_validation, 'boolean');
     assert.strictEqual(typeof config.workflow.codex_supervisor, 'boolean');
+    assert.strictEqual(typeof config.workflow.codex_supervisor_phase, 'boolean');
     assert.strictEqual(typeof config.workflow.codex_supervisor_transport, 'string');
     assert.strictEqual(typeof config.workflow.codex_launch_command, 'string');
     assert.strictEqual(typeof config.workflow.codex_boot_delay_ms, 'number');

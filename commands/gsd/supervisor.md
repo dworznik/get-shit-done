@@ -1,7 +1,7 @@
 ---
 name: gsd:supervisor
-description: Run the Codex supervisor against a generated quick/focus bundle
-argument-hint: "--bundle <path> --stage pre|post [--status <path>] [--findings <path>] [--report <path>]"
+description: Run the Codex supervisor against a generated quick/focus or phase bundle
+argument-hint: "--bundle <path> --stage pre|post|plan|execute [--kind quick|phase] [--status <path>] [--findings <path>] [--report <path>]"
 allowed-tools:
   - Read
   - Write
@@ -11,7 +11,7 @@ allowed-tools:
   - Task
 ---
 <objective>
-Run the Codex supervisor as a separate artifact-driven analysis pass for quick/focus tasks.
+Run the Codex supervisor as a separate artifact-driven analysis pass for quick/focus tasks or roadmap phases.
 
 This command is Codex-only. It does not execute Claude Code inside Codex.
 It reads a generated supervisor bundle, spawns the read-only `gsd-supervisor` agent,
@@ -22,8 +22,9 @@ then writes:
 
 <context>
 Parse `$ARGUMENTS` for:
-- `--bundle <path>` — required, path to `SUPERVISOR-PRE.json` or `SUPERVISOR-POST.json`
-- `--stage pre|post` — required
+- `--bundle <path>` — required, path to a generated supervisor bundle
+- `--stage pre|post|plan|execute` — required
+- `--kind quick|phase` — optional; if omitted, infer from the bundle content/path
 - `--status <path>` — optional explicit status output path
 - `--findings <path>` — optional explicit findings output path
 - `--report <path>` — optional explicit report output path
@@ -35,9 +36,11 @@ If either is missing, stop with a clear usage error.
 1. Verify the bundle file exists.
 2. Derive `QUICK_DIR=$(dirname "$BUNDLE_PATH")`.
 3. Resolve output paths:
-   - default findings: `${QUICK_DIR}/SUPERVISOR-${STAGE^^}-FINDINGS.json`
-   - default report: `${QUICK_DIR}/SUPERVISOR-${STAGE^^}-REPORT.md`
-   - default status: `${QUICK_DIR}/SUPERVISOR-${STAGE^^}-STATUS.json`
+   - quick/focus stages use `SUPERVISOR-${STAGE^^}-*`
+   - phase stages use `PHASE-SUPERVISOR-${STAGE^^}-*`
+   - compatibility copies:
+     - quick/focus: `SUPERVISOR-FINDINGS.json`, `SUPERVISOR-REPORT.md`
+     - phase: `PHASE-SUPERVISOR-FINDINGS.json`, `PHASE-SUPERVISOR-REPORT.md`
 4. Immediately write a JSON status payload with:
    - `stage`
    - `state: "running"`

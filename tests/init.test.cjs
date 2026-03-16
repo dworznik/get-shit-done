@@ -23,6 +23,12 @@ describe('init commands', () => {
     const phaseDir = path.join(tmpDir, '.planning', 'phases', '03-api');
     fs.mkdirSync(phaseDir, { recursive: true });
     fs.writeFileSync(path.join(phaseDir, '03-01-PLAN.md'), '# Plan');
+    fs.writeFileSync(path.join(phaseDir, '03-CONTEXT.md'), '# Context');
+    fs.writeFileSync(path.join(phaseDir, '03-RESEARCH.md'), '# Research');
+    fs.writeFileSync(path.join(phaseDir, '03-IMPORT.md'), '# Import');
+    fs.writeFileSync(path.join(phaseDir, '03-VALIDATION.md'), '# Validation');
+    fs.writeFileSync(path.join(phaseDir, '03-VERIFICATION.md'), '# Verification');
+    fs.writeFileSync(path.join(phaseDir, '03-UAT.md'), '# UAT');
 
     const result = runGsdTools('init execute-phase 03', tmpDir);
     assert.ok(result.success, `Command failed: ${result.error}`);
@@ -31,6 +37,19 @@ describe('init commands', () => {
     assert.strictEqual(output.state_path, '.planning/STATE.md');
     assert.strictEqual(output.roadmap_path, '.planning/ROADMAP.md');
     assert.strictEqual(output.config_path, '.planning/config.json');
+    assert.strictEqual(output.context_path, '.planning/phases/03-api/03-CONTEXT.md');
+    assert.strictEqual(output.research_path, '.planning/phases/03-api/03-RESEARCH.md');
+    assert.strictEqual(output.import_path, '.planning/phases/03-api/03-IMPORT.md');
+    assert.strictEqual(output.validation_path, '.planning/phases/03-api/03-VALIDATION.md');
+    assert.strictEqual(output.verification_path, '.planning/phases/03-api/03-VERIFICATION.md');
+    assert.strictEqual(output.uat_path, '.planning/phases/03-api/03-UAT.md');
+    assert.strictEqual(output.codex_supervisor_phase_enabled, false);
+    assert.strictEqual(typeof output.runtime_context, 'string');
+    assert.strictEqual(typeof output.codex_supervisor_transport, 'string');
+    assert.strictEqual(typeof output.codex_launch_command, 'string');
+    assert.strictEqual(typeof output.codex_boot_delay_ms, 'number');
+    assert.strictEqual(typeof output.codex_supervisor_timeout_seconds, 'number');
+    assert.strictEqual(typeof output.codex_supervisor_poll_ms, 'number');
   });
 
   test('init plan-phase returns file paths', () => {
@@ -39,6 +58,7 @@ describe('init commands', () => {
     fs.writeFileSync(path.join(phaseDir, '03-CONTEXT.md'), '# Phase Context');
     fs.writeFileSync(path.join(phaseDir, '03-IMPORT.md'), '# Imported Notes');
     fs.writeFileSync(path.join(phaseDir, '03-RESEARCH.md'), '# Research Findings');
+    fs.writeFileSync(path.join(phaseDir, '03-VALIDATION.md'), '# Validation');
     fs.writeFileSync(path.join(phaseDir, '03-VERIFICATION.md'), '# Verification');
     fs.writeFileSync(path.join(phaseDir, '03-UAT.md'), '# UAT');
 
@@ -52,8 +72,16 @@ describe('init commands', () => {
     assert.strictEqual(output.context_path, '.planning/phases/03-api/03-CONTEXT.md');
     assert.strictEqual(output.import_path, '.planning/phases/03-api/03-IMPORT.md');
     assert.strictEqual(output.research_path, '.planning/phases/03-api/03-RESEARCH.md');
+    assert.strictEqual(output.validation_path, '.planning/phases/03-api/03-VALIDATION.md');
     assert.strictEqual(output.verification_path, '.planning/phases/03-api/03-VERIFICATION.md');
     assert.strictEqual(output.uat_path, '.planning/phases/03-api/03-UAT.md');
+    assert.strictEqual(output.codex_supervisor_phase_enabled, false);
+    assert.strictEqual(typeof output.runtime_context, 'string');
+    assert.strictEqual(typeof output.codex_supervisor_transport, 'string');
+    assert.strictEqual(typeof output.codex_launch_command, 'string');
+    assert.strictEqual(typeof output.codex_boot_delay_ms, 'number');
+    assert.strictEqual(typeof output.codex_supervisor_timeout_seconds, 'number');
+    assert.strictEqual(typeof output.codex_supervisor_poll_ms, 'number');
   });
 
   test('init plan-phase exposes text_mode from config (defaults false)', () => {
@@ -160,6 +188,8 @@ describe('init commands', () => {
     assert.strictEqual(output.research_path, undefined);
     assert.strictEqual(output.reviews_path, undefined);
     assert.strictEqual(output.has_reviews, false);
+    assert.strictEqual(output.validation_path, undefined);
+    assert.strictEqual(output.codex_supervisor_phase_enabled, false);
   });
 
   // ── phase_req_ids extraction (fix for #684) ──────────────────────────────

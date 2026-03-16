@@ -111,6 +111,7 @@ Create detailed execution plan for a specific phase.
 - Breaks phase into concrete, actionable tasks
 - Includes verification criteria and success measures
 - Multiple plans per phase supported (XX-01, XX-02, etc.)
+- Can run a Codex supervisor plan gate after plan-checking when `workflow.codex_supervisor_phase` is enabled
 
 Usage: `/gsd:plan-phase 1`
 Result: Creates `.planning/phases/01-foundation/01-01-PLAN.md`
@@ -126,6 +127,7 @@ Execute all plans in a phase, or run a specific wave.
 - Plans within each wave run in parallel via Task tool
 - Optional `--wave N` flag executes only Wave `N` and stops unless the phase is now fully complete
 - Verifies phase goal after all plans complete
+- Can run a Codex supervisor execute gate before `phase complete` when `workflow.codex_supervisor_phase` is enabled
 - Updates REQUIREMENTS.md, ROADMAP.md, STATE.md
 
 Usage: `/gsd:execute-phase 5`
@@ -212,9 +214,9 @@ Usage: `/gsd:fast "fix the typo in README"`
 Usage: `/gsd:fast "add .env to gitignore"`
 
 **`/gsd:supervisor`** (Codex only)
-Run the Codex supervisor against a generated quick/focus bundle.
+Run the Codex supervisor against a generated quick/focus or phase bundle.
 
-- Consumes `SUPERVISOR-PRE.json` or `SUPERVISOR-POST.json`
+- Consumes `SUPERVISOR-PRE.json`, `SUPERVISOR-POST.json`, `PHASE-SUPERVISOR-PLAN.json`, or `PHASE-SUPERVISOR-EXECUTE.json`
 - Focuses on spec gaps, stack compatibility, and implementation mismatches
 - Runs before or after Claude work; it does not nest a Claude session inside Codex
 - Supports tmux-based handoff from Claude and direct execution inside Codex

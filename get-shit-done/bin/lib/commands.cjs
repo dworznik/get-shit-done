@@ -64,12 +64,28 @@ function sleepMs(ms) {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }
 
-function supervisorArtifactPaths(fullPath, relPath, stage) {
-  const upper = stage === 'pre' ? 'PRE' : 'POST';
-  const bundleName = `SUPERVISOR-${upper}.json`;
-  const statusName = `SUPERVISOR-${upper}-STATUS.json`;
-  const findingsName = `SUPERVISOR-${upper}-FINDINGS.json`;
-  const reportName = `SUPERVISOR-${upper}-REPORT.md`;
+function normalizeSupervisorKind(kind) {
+  return kind === 'phase' ? 'phase' : 'quick';
+}
+
+function validSupervisorStages(kind) {
+  return kind === 'phase' ? ['plan', 'execute'] : ['pre', 'post'];
+}
+
+function supervisorManifestName(kind) {
+  return kind === 'phase' ? 'PHASE_RUN_MANIFEST.json' : 'RUN_MANIFEST.json';
+}
+
+function supervisorArtifactPaths(fullPath, relPath, kind, stage) {
+  const normalizedKind = normalizeSupervisorKind(kind);
+  const stageUpper = String(stage || '').toUpperCase();
+  const prefix = normalizedKind === 'phase' ? 'PHASE-SUPERVISOR' : 'SUPERVISOR';
+  const bundleName = `${prefix}-${stageUpper}.json`;
+  const statusName = `${prefix}-${stageUpper}-STATUS.json`;
+  const findingsName = `${prefix}-${stageUpper}-FINDINGS.json`;
+  const reportName = `${prefix}-${stageUpper}-REPORT.md`;
+  const latestFindingsName = normalizedKind === 'phase' ? 'PHASE-SUPERVISOR-FINDINGS.json' : 'SUPERVISOR-FINDINGS.json';
+  const latestReportName = normalizedKind === 'phase' ? 'PHASE-SUPERVISOR-REPORT.md' : 'SUPERVISOR-REPORT.md';
 
   return {
     abs: {
@@ -77,16 +93,16 @@ function supervisorArtifactPaths(fullPath, relPath, stage) {
       status: path.join(fullPath, statusName),
       findings: path.join(fullPath, findingsName),
       report: path.join(fullPath, reportName),
-      latestFindings: path.join(fullPath, 'SUPERVISOR-FINDINGS.json'),
-      latestReport: path.join(fullPath, 'SUPERVISOR-REPORT.md'),
+      latestFindings: path.join(fullPath, latestFindingsName),
+      latestReport: path.join(fullPath, latestReportName),
     },
     rel: {
       bundle: toPosixPath(path.join(relPath, bundleName)),
       status: toPosixPath(path.join(relPath, statusName)),
       findings: toPosixPath(path.join(relPath, findingsName)),
       report: toPosixPath(path.join(relPath, reportName)),
-      latestFindings: toPosixPath(path.join(relPath, 'SUPERVISOR-FINDINGS.json')),
-      latestReport: toPosixPath(path.join(relPath, 'SUPERVISOR-REPORT.md')),
+      latestFindings: toPosixPath(path.join(relPath, latestFindingsName)),
+      latestReport: toPosixPath(path.join(relPath, latestReportName)),
     },
   };
 }
@@ -108,14 +124,17 @@ function updateLatestSupervisorOutputs(paths) {
   }
 }
 
-function findSourceJsonArtifacts(fullPath) {
+function findSourceJsonArtifacts(fullPath, kind) {
+  const manifestName = supervisorManifestName(kind);
   try {
     return fs.readdirSync(fullPath)
       .filter(name => name.endsWith('.json'))
       .filter(name => !(
-        name === 'RUN_MANIFEST.json' ||
+        name === manifestName ||
         /^SUPERVISOR-(PRE|POST)(-STATUS|-FINDINGS)?\.json$/.test(name) ||
-        name === 'SUPERVISOR-FINDINGS.json'
+        /^PHASE-SUPERVISOR-(PLAN|EXECUTE)(-STATUS|-FINDINGS)?\.json$/.test(name) ||
+        name === 'SUPERVISOR-FINDINGS.json' ||
+        name === 'PHASE-SUPERVISOR-FINDINGS.json'
       ))
       .sort();
   } catch {
@@ -179,6 +198,194 @@ function supervisorBaseStatus({ manifest, stage, runtime, transport, paths, laun
     completed_at: null,
     error: errorMessage || null,
   };
+}
+
+function findArtifactBySuffixes(fullDir, suffixes) {
+  try {
+    const suffixList = Array.isArray(suffixes) ? suffixes : [suffixes];
+    const matches = fs.readdirSync(fullDir)
+      .filter(name => suffixList.some(suffix => name.endsWith(suffix)))
+      .sort();
+    return matches.length > 0 ? path.join(fullDir, matches[0]) : null;
+  } catch {
+    return null;
+  }
+}
+
+function extractPhaseNumberFromDir(fullPath) {
+  const match = path.basename(fullPath).match(/^(\d+[A-Z]?(?:\.\d+)*)/i);
+  return match ? match[1] : null;
+}
+
+function extractRequirementsFromRoadmapSection(section) {
+  if (!section) return [];
+  const match = section.match(/^\*\*Requirements\*\*:[^\S\n]*([^\n]*)$/mi);
+  if (!match) return [];
+  const raw = match[1].replace(/[\[\]]/g, '').trim();
+  if (!raw || raw === 'TBD') return [];
+  return raw.split(',').map(value => value.trim()).filter(Boolean);
+}
+
+function extractDependsOnPhases(section) {
+  if (!section) return { raw: null, phase_numbers: [] };
+  const match = section.match(/^\*\*Depends on:\*\*\s*([^\n]+)$/mi);
+  const raw = match ? match[1].trim() : null;
+  if (!raw || /^none$/i.test(raw)) {
+    return { raw, phase_numbers: [] };
+  }
+  const phaseNumbers = [...raw.matchAll(/Phase\s+(\d+[A-Z]?(?:\.\d+)*)/gi)].map(item => item[1]);
+  return { raw, phase_numbers: [...new Set(phaseNumbers)] };
+}
+
+function extractSuccessCriteria(section) {
+  if (!section) return [];
+  const match = section.match(/\*\*Success Criteria\*\*[^\n]*:\s*\n((?:\s*\d+\.\s*[^\n]+\n?)+)/i);
+  if (!match) return [];
+  return match[1]
+    .trim()
+    .split('\n')
+    .map(line => line.replace(/^\s*\d+\.\s*/, '').trim())
+    .filter(Boolean);
+}
+
+function extractCheckpointTypes(planContent) {
+  if (!planContent) return [];
+  return [...new Set(
+    [...planContent.matchAll(/type="checkpoint:([^"]+)"/g)].map(match => match[1].trim()).filter(Boolean)
+  )];
+}
+
+function indexPhasePlansFromDir(cwd, fullPath, relPath) {
+  const phaseFiles = fs.existsSync(fullPath) ? fs.readdirSync(fullPath) : [];
+  const planFiles = phaseFiles.filter(name => name.endsWith('-PLAN.md') || name === 'PLAN.md').sort();
+  const summaryFiles = phaseFiles.filter(name => name.endsWith('-SUMMARY.md') || name === 'SUMMARY.md').sort();
+  const completedPlanIds = new Set(summaryFiles.map(name => name.replace('-SUMMARY.md', '').replace('SUMMARY.md', '')));
+  const plans = [];
+  const waves = {};
+  const incomplete = [];
+  let hasCheckpoints = false;
+
+  for (const planFile of planFiles) {
+    const planPath = path.join(fullPath, planFile);
+    const content = readTextIfExists(planPath) || '';
+    const frontmatter = extractFrontmatter(content);
+    const planId = planFile.replace('-PLAN.md', '').replace('PLAN.md', '');
+    const wave = parseInt(frontmatter.wave, 10) || 1;
+    const checkpointTypes = extractCheckpointTypes(content);
+    const autonomous = frontmatter.autonomous !== undefined
+      ? frontmatter.autonomous === true || frontmatter.autonomous === 'true'
+      : checkpointTypes.length === 0;
+    const taskCount = (content.match(/<task[\s>]/gi) || []).length || (content.match(/##\s*Task\s*\d+/gi) || []).length;
+    const hasSummary = completedPlanIds.has(planId);
+    if (!hasSummary) incomplete.push(planId);
+    if (checkpointTypes.length > 0 || !autonomous) hasCheckpoints = true;
+
+    const planSummary = summarizePlan(cwd, planPath) || {};
+    const plan = {
+      id: planId,
+      path: toPosixPath(path.join(relPath, planFile)),
+      wave,
+      autonomous,
+      checkpoint_types: checkpointTypes,
+      objective: xmlBlocks(content, 'objective')[0] || frontmatter.objective || null,
+      requirements: frontmatter.requirements || [],
+      depends_on: frontmatter.depends_on || [],
+      files_modified: frontmatter.files_modified || [],
+      task_count: taskCount,
+      has_summary: hasSummary,
+      gap_closure: frontmatter.gap_closure === true || frontmatter.gap_closure === 'true',
+      must_haves: planSummary.must_haves || { truths: [], artifacts: [], key_links: [] },
+      touched_files: planSummary.touched_files || [],
+    };
+
+    plans.push(plan);
+    const waveKey = String(wave);
+    if (!waves[waveKey]) waves[waveKey] = [];
+    waves[waveKey].push(planId);
+  }
+
+  return {
+    phase_dir: relPath,
+    plans,
+    waves,
+    incomplete,
+    has_checkpoints: hasCheckpoints,
+    plan_count: plans.length,
+    summary_count: summaryFiles.length,
+    summary_paths: summaryFiles.map(name => toPosixPath(path.join(relPath, name))),
+  };
+}
+
+function summarizeVerification(cwd, verificationPath) {
+  if (!verificationPath) return null;
+  const content = readTextIfExists(verificationPath);
+  if (!content) return null;
+  const frontmatter = extractFrontmatter(content);
+  return {
+    path: toRelOrNull(cwd, verificationPath),
+    status: extractVerificationStatus(content),
+    score: frontmatter.score || null,
+    previous_status: frontmatter.re_verification?.previous_status || null,
+    gaps: frontmatter.gaps || [],
+    human_verification: frontmatter.human_verification || [],
+    gaps_summary: markdownSection(content, 'Gaps Summary'),
+    human_verification_section: markdownSection(content, 'Human Verification Required'),
+    requirements_coverage_section: markdownSection(content, 'Requirements Coverage'),
+  };
+}
+
+function summarizeUat(cwd, uatPath) {
+  if (!uatPath) return null;
+  const content = readTextIfExists(uatPath);
+  if (!content) return null;
+  const frontmatter = extractFrontmatter(content);
+  const currentTestSection = markdownSection(content, 'Current Test');
+  const summarySection = markdownSection(content, 'Summary');
+  const gapsSection = markdownSection(content, 'Gaps');
+  const currentTestNameMatch = currentTestSection ? currentTestSection.match(/name:\s*(.+)/i) : null;
+  return {
+    path: toRelOrNull(cwd, uatPath),
+    status: frontmatter.status || null,
+    started: frontmatter.started || null,
+    updated: frontmatter.updated || null,
+    current_test: currentTestNameMatch ? currentTestNameMatch[1].trim() : null,
+    summary: summarySection || null,
+    gaps: gapsSection || null,
+  };
+}
+
+function collectDependencyPhaseContext(cwd, dependencyPhaseNumbers) {
+  return dependencyPhaseNumbers.map(phaseNumber => {
+    const phaseInfo = findPhaseInternal(cwd, phaseNumber);
+    if (!phaseInfo?.directory) {
+      return {
+        phase_number: phaseNumber,
+        found: false,
+        phase_name: null,
+        phase_dir: null,
+        summaries: [],
+      };
+    }
+
+    const fullDir = path.join(cwd, phaseInfo.directory);
+    const summaries = (phaseInfo.summaries || []).map(name => {
+      const summary = summarizeSummary(cwd, path.join(fullDir, name)) || {};
+      return {
+        plan_id: name.replace('-SUMMARY.md', '').replace('SUMMARY.md', ''),
+        ...summary,
+      };
+    });
+
+    return {
+      phase_number: phaseInfo.phase_number,
+      found: true,
+      phase_name: phaseInfo.phase_name,
+      phase_dir: phaseInfo.directory,
+      plan_count: phaseInfo.plans?.length || 0,
+      summary_count: phaseInfo.summaries?.length || 0,
+      summaries,
+    };
+  });
 }
 
 function markdownSection(content, heading) {
@@ -406,15 +613,116 @@ function normalizeSupervisorFindings(content) {
   };
 }
 
-function cmdSupervisorBundle(cwd, quickDirArg, stage, raw) {
-  if (!stage || !['pre', 'post'].includes(stage)) {
-    error('Usage: supervisor-bundle <quick_dir> --stage pre|post');
+function cmdSupervisorBundle(cwd, dirArg, stage, raw, kind = 'quick') {
+  const normalizedKind = normalizeSupervisorKind(kind);
+  if (!stage || !validSupervisorStages(normalizedKind).includes(stage)) {
+    const stageHelp = normalizedKind === 'phase' ? 'plan|execute' : 'pre|post';
+    error(`Usage: supervisor-bundle <dir> --stage ${stageHelp}${normalizedKind === 'phase' ? ' --kind phase' : ''}`);
   }
 
-  const { fullPath, relPath } = parseQuickDir(cwd, quickDirArg);
-  const manifestPath = path.join(fullPath, 'RUN_MANIFEST.json');
+  const { fullPath, relPath } = parseQuickDir(cwd, dirArg);
+  const manifestPath = path.join(fullPath, supervisorManifestName(normalizedKind));
   const manifest = readJsonIfExists(manifestPath) || {};
-  const paths = supervisorArtifactPaths(fullPath, relPath, stage);
+  const paths = supervisorArtifactPaths(fullPath, relPath, normalizedKind, stage);
+
+  if (normalizedKind === 'phase') {
+    const phaseNumber = manifest.phase_number || extractPhaseNumberFromDir(fullPath);
+    const phaseInfo = phaseNumber ? findPhaseInternal(cwd, phaseNumber) : null;
+    const roadmapPhase = phaseNumber ? getRoadmapPhaseInternal(cwd, phaseNumber) : null;
+    const contextPath = manifest.context_path ? path.join(cwd, manifest.context_path) : findArtifactBySuffixes(fullPath, ['-CONTEXT.md', 'CONTEXT.md']);
+    const researchPath = manifest.research_path ? path.join(cwd, manifest.research_path) : findArtifactBySuffixes(fullPath, ['-RESEARCH.md', 'RESEARCH.md']);
+    const importPath = manifest.import_path ? path.join(cwd, manifest.import_path) : findArtifactBySuffixes(fullPath, ['-IMPORT.md', 'IMPORT.md']);
+    const validationPath = manifest.validation_path ? path.join(cwd, manifest.validation_path) : findArtifactBySuffixes(fullPath, ['-VALIDATION.md', 'VALIDATION.md']);
+    const verificationPath = manifest.verification_path ? path.join(cwd, manifest.verification_path) : findArtifactBySuffixes(fullPath, ['-VERIFICATION.md', 'VERIFICATION.md']);
+    const uatPath = manifest.uat_path ? path.join(cwd, manifest.uat_path) : findArtifactBySuffixes(fullPath, ['-UAT.md', 'UAT.md']);
+    const planIndex = indexPhasePlansFromDir(cwd, fullPath, relPath);
+    const dependsOn = extractDependsOnPhases(roadmapPhase?.section || '');
+    const phaseRequirements = extractRequirementsFromRoadmapSection(roadmapPhase?.section || '');
+    const dependencyPhases = collectDependencyPhaseContext(cwd, dependsOn.phase_numbers);
+
+    const bundle = {
+      kind: 'phase',
+      stage,
+      generated_at: new Date().toISOString(),
+      phase: {
+        run_id: manifest.run_id || `phase-${phaseNumber || path.basename(fullPath)}`,
+        phase_number: phaseNumber,
+        phase_name: manifest.phase_name || phaseInfo?.phase_name || roadmapPhase?.phase_name || null,
+        phase_slug: manifest.phase_slug || phaseInfo?.phase_slug || null,
+        phase_dir: relPath,
+        goal: roadmapPhase?.goal || null,
+        success_criteria: extractSuccessCriteria(roadmapPhase?.section || ''),
+        requirements: phaseRequirements,
+        depends_on: dependsOn.phase_numbers,
+        depends_on_raw: dependsOn.raw,
+        planner_status: manifest.planner_status || null,
+        checker_status: manifest.checker_status || null,
+        execution_status: manifest.execution_status || null,
+        verification_status: manifest.verification_status || null,
+        supervisor_plan_status: manifest.supervisor_plan_status || null,
+        supervisor_execute_status: manifest.supervisor_execute_status || null,
+        final_status: manifest.final_status || null,
+        runtime_context: manifest.supervisor_runtime || null,
+        supervisor_transport: manifest.supervisor_transport || null,
+      },
+      artifacts: {
+        manifest_path: toRelOrNull(cwd, manifestPath),
+        state_path: '.planning/STATE.md',
+        roadmap_path: '.planning/ROADMAP.md',
+        requirements_path: '.planning/REQUIREMENTS.md',
+        context_path: toRelOrNull(cwd, contextPath),
+        research_path: toRelOrNull(cwd, researchPath),
+        import_path: toRelOrNull(cwd, importPath),
+        validation_path: toRelOrNull(cwd, validationPath),
+        verification_path: toRelOrNull(cwd, verificationPath),
+        uat_path: toRelOrNull(cwd, uatPath),
+        bundle_path: paths.rel.bundle,
+        status_path: paths.rel.status,
+        findings_path: paths.rel.findings,
+        report_path: paths.rel.report,
+        latest_findings_path: paths.rel.latestFindings,
+        latest_report_path: paths.rel.latestReport,
+      },
+      plans: planIndex,
+      dependencies: dependencyPhases,
+      source_artifacts: {
+        json_sidecars: findSourceJsonArtifacts(fullPath, 'phase').map(name => toPosixPath(path.join(relPath, name))),
+      },
+    };
+
+    if (stage === 'execute') {
+      const verification = summarizeVerification(cwd, verificationPath);
+      const uat = summarizeUat(cwd, uatPath);
+      const summaries = (phaseInfo?.summaries || planIndex.summary_paths.map(summaryPath => path.basename(summaryPath))).map(name => {
+        const summary = summarizeSummary(cwd, path.join(fullPath, name)) || {};
+        return {
+          plan_id: name.replace('-SUMMARY.md', '').replace('SUMMARY.md', ''),
+          ...summary,
+        };
+      });
+
+      bundle.execution = {
+        summaries,
+        verifier: verification,
+        uat,
+        completion_ready: {
+          all_plans_completed: planIndex.incomplete.length === 0 && planIndex.plan_count > 0,
+          verification_passed: verification?.status === 'passed',
+          has_uat: !!uat,
+          ready_for_phase_complete: planIndex.incomplete.length === 0 && verification?.status === 'passed',
+        },
+      };
+    }
+
+    fs.writeFileSync(paths.abs.bundle, JSON.stringify(bundle, null, 2), 'utf-8');
+    output({
+      kind: 'phase',
+      stage,
+      bundle_path: paths.rel.bundle,
+      phase_dir: relPath,
+    }, raw, paths.rel.bundle);
+    return;
+  }
 
   const planPath = manifest.plan_path
     ? path.join(cwd, manifest.plan_path)
@@ -441,6 +749,7 @@ function cmdSupervisorBundle(cwd, quickDirArg, stage, raw) {
   const verificationStatus = extractVerificationStatus(verificationContent);
 
   const bundle = {
+    kind: 'quick',
     stage,
     generated_at: new Date().toISOString(),
     task: {
@@ -478,7 +787,7 @@ function cmdSupervisorBundle(cwd, quickDirArg, stage, raw) {
     plan,
     stack_context: stackContext,
     source_artifacts: {
-      json_sidecars: findSourceJsonArtifacts(fullPath).map(name => toPosixPath(path.join(relPath, name))),
+      json_sidecars: findSourceJsonArtifacts(fullPath, 'quick').map(name => toPosixPath(path.join(relPath, name))),
     },
   };
 
@@ -500,8 +809,8 @@ function cmdSupervisorBundle(cwd, quickDirArg, stage, raw) {
   }
 
   fs.writeFileSync(paths.abs.bundle, JSON.stringify(bundle, null, 2), 'utf-8');
-
   output({
+    kind: 'quick',
     stage,
     bundle_path: paths.rel.bundle,
     quick_dir: relPath,
@@ -524,20 +833,22 @@ function cmdSupervisorFindings(cwd, findingsPathArg, raw) {
   output(normalized, raw, normalized.status);
 }
 
-function cmdSupervisorLaunch(cwd, quickDirArg, stage, raw) {
-  if (!stage || !['pre', 'post'].includes(stage)) {
-    error('Usage: supervisor-launch <quick_dir> --stage pre|post');
+function cmdSupervisorLaunch(cwd, dirArg, stage, raw, kind = 'quick') {
+  const normalizedKind = normalizeSupervisorKind(kind);
+  if (!stage || !validSupervisorStages(normalizedKind).includes(stage)) {
+    const stageHelp = normalizedKind === 'phase' ? 'plan|execute' : 'pre|post';
+    error(`Usage: supervisor-launch <dir> --stage ${stageHelp}${normalizedKind === 'phase' ? ' --kind phase' : ''}`);
   }
 
-  const { fullPath, relPath } = parseQuickDir(cwd, quickDirArg);
-  const paths = supervisorArtifactPaths(fullPath, relPath, stage);
-  const manifest = readJsonIfExists(path.join(fullPath, 'RUN_MANIFEST.json')) || {};
+  const { fullPath, relPath } = parseQuickDir(cwd, dirArg);
+  const paths = supervisorArtifactPaths(fullPath, relPath, normalizedKind, stage);
+  const manifest = readJsonIfExists(path.join(fullPath, supervisorManifestName(normalizedKind))) || {};
   const config = loadConfig(cwd);
   const runtime = detectRuntimeContext();
   const transport = resolveCodexSupervisorTransport(config, runtime);
   const launchCommand = config.codex_launch_command || 'codex';
   const runId = manifest.run_id || path.basename(fullPath);
-  const windowName = `gsd-supervisor-${runId.replace(/[^a-zA-Z0-9-]/g, '-')}-${stage}`;
+  const windowName = `gsd-supervisor-${normalizedKind}-${runId.replace(/[^a-zA-Z0-9-]/g, '-')}-${stage}`;
 
   if (!fs.existsSync(paths.abs.bundle)) {
     error(`Supervisor bundle not found: ${paths.rel.bundle}. Run supervisor-bundle first.`);
@@ -642,13 +953,15 @@ function cmdSupervisorLaunch(cwd, quickDirArg, stage, raw) {
   output(status, raw, tmuxTarget || 'running');
 }
 
-function cmdSupervisorWait(cwd, quickDirArg, stage, raw) {
-  if (!stage || !['pre', 'post'].includes(stage)) {
-    error('Usage: supervisor-wait <quick_dir> --stage pre|post');
+function cmdSupervisorWait(cwd, dirArg, stage, raw, kind = 'quick') {
+  const normalizedKind = normalizeSupervisorKind(kind);
+  if (!stage || !validSupervisorStages(normalizedKind).includes(stage)) {
+    const stageHelp = normalizedKind === 'phase' ? 'plan|execute' : 'pre|post';
+    error(`Usage: supervisor-wait <dir> --stage ${stageHelp}${normalizedKind === 'phase' ? ' --kind phase' : ''}`);
   }
 
-  const { fullPath, relPath } = parseQuickDir(cwd, quickDirArg);
-  const paths = supervisorArtifactPaths(fullPath, relPath, stage);
+  const { fullPath, relPath } = parseQuickDir(cwd, dirArg);
+  const paths = supervisorArtifactPaths(fullPath, relPath, normalizedKind, stage);
   const config = loadConfig(cwd);
   const pollMs = Math.max(100, Number(config.codex_supervisor_poll_ms) || 2000);
   const timeoutMs = Math.max(pollMs, (Number(config.codex_supervisor_timeout_seconds) || 1800) * 1000);

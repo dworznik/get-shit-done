@@ -66,6 +66,7 @@ describe('loadConfig', () => {
     assert.strictEqual(config.nyquist_validation, true);
     assert.strictEqual(config.text_mode, false);
     assert.strictEqual(config.codex_supervisor, false);
+    assert.strictEqual(config.codex_supervisor_phase, false);
     assert.strictEqual(config.codex_supervisor_transport, 'auto');
     assert.strictEqual(config.codex_launch_command, 'codex');
     assert.strictEqual(config.codex_boot_delay_ms, 1500);
