@@ -136,7 +136,7 @@ INIT=$(node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" init phase-op "${PHA
 if [[ "$INIT" == @file:* ]]; then INIT=$(cat "${INIT#@file:}"); fi
 ```
 
-Parse JSON for: `commit_docs`, `phase_found`, `phase_dir`, `phase_number`, `phase_name`, `phase_slug`, `padded_phase`, `has_research`, `has_context`, `has_plans`, `has_verification`, `plan_count`, `roadmap_exists`, `planning_exists`.
+Parse JSON for: `commit_docs`, `phase_found`, `phase_dir`, `phase_number`, `phase_name`, `phase_slug`, `padded_phase`, `has_research`, `has_context`, `has_plans`, `has_verification`, `plan_count`, `roadmap_exists`, `planning_exists`, `import_path`.
 
 **If `phase_found` is false:**
 ```
@@ -216,6 +216,20 @@ Extract from these:
 - **REQUIREMENTS.md** — Acceptance criteria, constraints, must-haves vs nice-to-haves
 - **STATE.md** — Current progress, any flags or session notes
 
+**Step 1b: Read imported phase notes when available**
+If `import_path` from init is not null:
+```bash
+cat "${import_path}" 2>/dev/null
+```
+
+Extract from this file:
+- imported goal and outputs
+- mapped requirements and success criteria
+- constraints / non-goals
+- open questions carried forward from the imported plan
+
+Treat these as an imported baseline to confirm or refine during discussion. They are NOT locked user decisions yet.
+
 **Step 2: Read all prior CONTEXT.md files**
 ```bash
 # Find all CONTEXT.md files from phases before current
@@ -236,6 +250,10 @@ Structure the extracted information:
 - [Key principle or constraint from PROJECT.md]
 - [Requirement that affects this phase from REQUIREMENTS.md]
 
+## Imported Baseline
+- [Imported assumption to confirm or keep]
+- [Imported open question worth discussing]
+
 ## From Prior Phases
 ### Phase N: [Name]
 - [Decision that may be relevant to current phase]
@@ -248,6 +266,7 @@ Structure the extracted information:
 
 **Usage in subsequent steps:**
 - `analyze_phase`: Skip gray areas already decided in prior phases
+- `analyze_phase`: Use imported baseline assumptions to seed the first gray areas
 - `present_gray_areas`: Annotate options with prior decisions ("You chose X in Phase 5")
 - `discuss_areas`: Pre-fill answers or flag conflicts ("This contradicts Phase 3 — same here or different?")
 
@@ -338,7 +357,7 @@ Store as internal `<codebase_context>` for use in analyze_phase and present_gray
 </step>
 
 <step name="analyze_phase">
-Analyze the phase to identify gray areas worth discussing. **Use both `prior_decisions` and `codebase_context` to ground the analysis.**
+Analyze the phase to identify gray areas worth discussing. **Use `prior_decisions`, any imported baseline from `import_path`, and `codebase_context` to ground the analysis.**
 
 **Read the phase description from ROADMAP.md and determine:**
 
@@ -357,6 +376,11 @@ Analyze the phase to identify gray areas worth discussing. **Use both `prior_dec
    - Scan `<prior_decisions>` for relevant choices (e.g., "Ctrl+C only, no single-key shortcuts")
    - These are **pre-answered** — don't re-ask unless this phase has conflicting needs
    - Note applicable prior decisions for use in presentation
+
+2b. **Check imported baseline** — If `import_path` exists:
+   - surface imported outputs, success criteria, and open questions
+   - use imported assumptions to seed the first discussion areas
+   - do not treat them as locked if the user wants to change them
 
 3. **Gray areas by category** — For each relevant category (UI, UX, Behavior, Empty States, Content), identify 1-2 specific ambiguities that would change implementation. **Annotate with code context where relevant** (e.g., "You already have a Card component" or "No existing pattern for this").
 
@@ -420,6 +444,11 @@ We'll clarify HOW to implement this.
 **Carrying forward from earlier phases:**
 - [Decision from Phase N that applies here]
 - [Decision from Phase M that applies here]
+
+[If imported baseline exists:]
+**Imported baseline from the source plan:**
+- [Imported output or assumption]
+- [Imported open question]
 ```
 
 **If `--auto`:** Auto-select ALL gray areas. Log: `[auto] Selected all gray areas: [list area names].` Skip the AskUserQuestion below and continue directly to discuss_areas with all areas selected.

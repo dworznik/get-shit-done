@@ -214,6 +214,10 @@ function cmdInitPlanPhase(cwd, phase, raw) {
       if (researchFile) {
         result.research_path = toPosixPath(path.join(phaseInfo.directory, researchFile));
       }
+      const importFile = files.find(f => f.endsWith('-IMPORT.md') || f === 'IMPORT.md');
+      if (importFile) {
+        result.import_path = toPosixPath(path.join(phaseInfo.directory, importFile));
+      }
       const verificationFile = files.find(f => f.endsWith('-VERIFICATION.md') || f === 'VERIFICATION.md');
       if (verificationFile) {
         result.verification_path = toPosixPath(path.join(phaseInfo.directory, verificationFile));
@@ -382,6 +386,85 @@ function cmdInitNewMilestone(cwd, raw) {
   };
 
   output(withProjectRoot(cwd, result), raw);
+}
+
+function getNextIntegerPhaseNumber(cwd) {
+  let maxPhase = 0;
+  const roadmapPath = path.join(cwd, '.planning', 'ROADMAP.md');
+
+  if (fs.existsSync(roadmapPath)) {
+    try {
+      const roadmap = fs.readFileSync(roadmapPath, 'utf-8');
+      const phasePattern = /#{2,4}\s*Phase\s+(\d+)[A-Z]?(?:\.\d+)*:/gi;
+      let match;
+      while ((match = phasePattern.exec(roadmap)) !== null) {
+        const phaseNum = parseInt(match[1], 10);
+        if (phaseNum > maxPhase) maxPhase = phaseNum;
+      }
+    } catch {}
+  }
+
+  if (maxPhase === 0) {
+    try {
+      const phasesDir = path.join(cwd, '.planning', 'phases');
+      const entries = fs.readdirSync(phasesDir, { withFileTypes: true });
+      for (const entry of entries) {
+        if (!entry.isDirectory()) continue;
+        const match = entry.name.match(/^(\d+)/);
+        if (!match) continue;
+        const phaseNum = parseInt(match[1], 10);
+        if (phaseNum > maxPhase) maxPhase = phaseNum;
+      }
+    } catch {}
+  }
+
+  return maxPhase + 1;
+}
+
+function cmdInitImportPlan(cwd, raw) {
+  const config = loadConfig(cwd);
+  const projectExists = pathExistsInternal(cwd, '.planning/PROJECT.md');
+  const nextPhaseNumber = getNextIntegerPhaseNumber(cwd);
+  const milestone = getMilestoneInfo(cwd);
+  const now = new Date();
+
+  const yy = String(now.getFullYear()).slice(-2);
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const dd = String(now.getDate()).padStart(2, '0');
+  const secondsSinceMidnight = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
+  const timeBlocks = Math.floor(secondsSinceMidnight / 2);
+  const importId = `${yy}${mm}${dd}-${timeBlocks.toString(36).padStart(3, '0')}`;
+
+  const result = {
+    importer_model: resolveModelInternal(cwd, 'gsd-plan-importer'),
+    commit_docs: config.commit_docs,
+    granularity: config.granularity,
+
+    planning_exists: pathExistsInternal(cwd, '.planning'),
+    project_exists: projectExists,
+    requirements_exists: pathExistsInternal(cwd, '.planning/REQUIREMENTS.md'),
+    roadmap_exists: pathExistsInternal(cwd, '.planning/ROADMAP.md'),
+    state_exists: pathExistsInternal(cwd, '.planning/STATE.md'),
+
+    mode: projectExists ? 'milestone' : 'bootstrap',
+    current_milestone: milestone.version,
+    current_milestone_name: milestone.name,
+    next_phase_number: String(nextPhaseNumber),
+    next_phase_padded: String(nextPhaseNumber).padStart(2, '0'),
+
+    imports_dir: '.planning/imports',
+    import_id: importId,
+    date: now.toISOString().split('T')[0],
+    timestamp: now.toISOString(),
+
+    project_path: '.planning/PROJECT.md',
+    requirements_path: '.planning/REQUIREMENTS.md',
+    roadmap_path: '.planning/ROADMAP.md',
+    state_path: '.planning/STATE.md',
+    config_path: '.planning/config.json',
+  };
+
+  output(result, raw);
 }
 
 function cmdInitQuick(cwd, description, raw) {
@@ -727,6 +810,10 @@ function cmdInitPhaseOp(cwd, phase, raw) {
       const researchFile = files.find(f => f.endsWith('-RESEARCH.md') || f === 'RESEARCH.md');
       if (researchFile) {
         result.research_path = toPosixPath(path.join(phaseInfo.directory, researchFile));
+      }
+      const importFile = files.find(f => f.endsWith('-IMPORT.md') || f === 'IMPORT.md');
+      if (importFile) {
+        result.import_path = toPosixPath(path.join(phaseInfo.directory, importFile));
       }
       const verificationFile = files.find(f => f.endsWith('-VERIFICATION.md') || f === 'VERIFICATION.md');
       if (verificationFile) {
@@ -1458,6 +1545,7 @@ module.exports = {
   cmdInitPlanPhase,
   cmdInitNewProject,
   cmdInitNewMilestone,
+  cmdInitImportPlan,
   cmdInitQuick,
   cmdInitFocusStack,
   cmdInitResume,

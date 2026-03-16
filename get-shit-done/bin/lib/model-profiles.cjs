@@ -9,6 +9,7 @@
 const MODEL_PROFILES = {
   'gsd-planner': { quality: 'opus', balanced: 'opus', budget: 'sonnet' },
   'gsd-roadmapper': { quality: 'opus', balanced: 'sonnet', budget: 'sonnet' },
+  'gsd-plan-importer': { quality: 'opus', balanced: 'sonnet', budget: 'sonnet' },
   'gsd-executor': { quality: 'opus', balanced: 'sonnet', budget: 'sonnet' },
   'gsd-phase-researcher': { quality: 'opus', balanced: 'sonnet', budget: 'haiku' },
   'gsd-project-researcher': { quality: 'opus', balanced: 'sonnet', budget: 'haiku' },

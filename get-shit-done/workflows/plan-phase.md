@@ -26,9 +26,9 @@ INIT=$(node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" init plan-phase "$PH
 if [[ "$INIT" == @file:* ]]; then INIT=$(cat "${INIT#@file:}"); fi
 ```
 
-Parse JSON for: `researcher_model`, `planner_model`, `checker_model`, `research_enabled`, `plan_checker_enabled`, `nyquist_validation_enabled`, `commit_docs`, `text_mode`, `phase_found`, `phase_dir`, `phase_number`, `phase_name`, `phase_slug`, `padded_phase`, `has_research`, `has_context`, `has_reviews`, `has_plans`, `plan_count`, `planning_exists`, `roadmap_exists`, `phase_req_ids`.
+Parse JSON for: `researcher_model`, `planner_model`, `checker_model`, `research_enabled`, `plan_checker_enabled`, `nyquist_validation_enabled`, `commit_docs`, `text_mode`, `phase_found`, `phase_dir`, `phase_number`, `phase_name`, `phase_slug`, `padded_phase`, `has_research`, `has_context`, `has_reviews`, `has_plans`, `plan_count`, `planning_exists`, `roadmap_exists`, `phase_req_ids`, `import_path`.
 
-**File paths (for <files_to_read> blocks):** `state_path`, `roadmap_path`, `requirements_path`, `context_path`, `research_path`, `verification_path`, `uat_path`, `reviews_path`. These are null if files don't exist.
+**File paths (for <files_to_read> blocks):** `state_path`, `roadmap_path`, `requirements_path`, `context_path`, `import_path`, `research_path`, `verification_path`, `uat_path`, `reviews_path`. These are null if files don't exist.
 
 **If `planning_exists` is false:** Error — run `/gsd:new-project` first.
 
@@ -194,6 +194,8 @@ Read discuss mode for context gate label:
 DISCUSS_MODE=$(node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" config-get workflow.discuss_mode 2>/dev/null || echo "discuss")
 ```
 
+If `import_path` is not null, display: `Using imported phase notes from: ${import_path}`
+
 If `TEXT_MODE` is true, present as a plain-text numbered list:
 ```
 No CONTEXT.md found for Phase {X}. Plans will use research and requirements only — your design preferences won't be included.
@@ -209,7 +211,14 @@ Enter number:
 
 Otherwise use AskUserQuestion:
 - header: "No context"
-- question: "No CONTEXT.md found for Phase {X}. Plans will use research and requirements only — your design preferences won't be included. Continue or capture context first?"
+- question: "No CONTEXT.md found for Phase {X}. Imported phase notes are available and can be used as the planning baseline. Continue or capture context first?"
+- options:
+  - "Continue without context" — Plan using imported phase notes + research + requirements
+  - "Run discuss-phase first" — Capture design decisions before planning
+
+If `import_path` is null, use AskUserQuestion:
+- header: "No context"
+- question: "No CONTEXT.md found for Phase {X}. Plans will use research and requirements only — your design preferences will not be included. Continue or capture context first?"
 - options:
   - "Continue without context" — Plan using research + requirements only
   If `DISCUSS_MODE` is `"assumptions"`:
@@ -294,6 +303,7 @@ Answer: "What do I need to know to PLAN this phase well?"
 
 <files_to_read>
 - {context_path} (USER DECISIONS from /gsd:discuss-phase)
+- {import_path} (Imported phase baseline)
 - {requirements_path} (Project requirements)
 - {state_path} (Project decisions and history)
 </files_to_read>
@@ -430,6 +440,7 @@ VERIFICATION_PATH=$(_gsd_field "$INIT" verification_path)
 UAT_PATH=$(_gsd_field "$INIT" uat_path)
 CONTEXT_PATH=$(_gsd_field "$INIT" context_path)
 REVIEWS_PATH=$(_gsd_field "$INIT" reviews_path)
+IMPORT_PATH=$(_gsd_field "$INIT" import_path)
 ```
 
 ## 7.5. Verify Nyquist Artifacts
@@ -478,6 +489,7 @@ Planner prompt:
 - {roadmap_path} (Roadmap)
 - {requirements_path} (Requirements)
 - {context_path} (USER DECISIONS from /gsd:discuss-phase)
+- {import_path} (Imported phase baseline)
 - {research_path} (Technical Research)
 - {verification_path} (Verification Gaps - if --gaps)
 - {uat_path} (UAT Gaps - if --gaps)
@@ -579,6 +591,7 @@ Checker prompt:
 - {roadmap_path} (Roadmap)
 - {requirements_path} (Requirements)
 - {context_path} (USER DECISIONS from /gsd:discuss-phase)
+- {import_path} (Imported phase baseline)
 - {research_path} (Technical Research — includes Validation Architecture)
 </files_to_read>
 
@@ -626,6 +639,7 @@ Revision prompt:
 <files_to_read>
 - {PHASE_DIR}/*-PLAN.md (Existing plans)
 - {context_path} (USER DECISIONS from /gsd:discuss-phase)
+- {import_path} (Imported phase baseline)
 </files_to_read>
 
 **Checker issues:** {structured_issues_from_checker}

@@ -125,6 +125,7 @@
  *   init plan-phase <phase>            All context for plan-phase workflow
  *   init new-project                   All context for new-project workflow
  *   init new-milestone                 All context for new-milestone workflow
+ *   init import-plan                   All context for import-plan workflow
  *   init quick <description>           All context for quick workflow
  *   init focus-stack <description>     All context for stacked focus workflow
  *   init resume                        All context for resume-project workflow
@@ -706,6 +707,9 @@ async function runCommand(command, args, cwd, raw) {
         case 'new-milestone':
           init.cmdInitNewMilestone(cwd, raw);
           break;
+        case 'import-plan':
+          init.cmdInitImportPlan(cwd, raw);
+          break;
         case 'quick':
           init.cmdInitQuick(cwd, args.slice(2).join(' '), raw);
           break;
@@ -746,7 +750,7 @@ async function runCommand(command, args, cwd, raw) {
           init.cmdInitRemoveWorkspace(cwd, args[2], raw);
           break;
         default:
-          error(`Unknown init workflow: ${workflow}\nAvailable: execute-phase, plan-phase, new-project, new-milestone, quick, focus-stack, resume, verify-work, phase-op, todos, milestone-op, map-codebase, progress, manager, new-workspace, list-workspaces, remove-workspace`);
+          error(`Unknown init workflow: ${workflow}\nAvailable: execute-phase, plan-phase, new-project, new-milestone, import-plan, quick, focus-stack, resume, verify-work, phase-op, todos, milestone-op, map-codebase, progress, manager, new-workspace, list-workspaces, remove-workspace`);
       }
       break;
     }

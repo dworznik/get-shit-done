@@ -209,6 +209,8 @@ If you prefer not to use that flag, add this to your project's `.claude/settings
 
 > **Already have code?** Run `/gsd:map-codebase` first. It spawns parallel agents to analyze your stack, architecture, conventions, and concerns. Then `/gsd:new-project` knows your codebase — questions focus on what you're adding, and planning automatically loads your patterns.
 
+> **Already have a plan from another agent?** Run `/gsd:import-plan @plan.md` to turn it into GSD requirements, roadmap phases, and per-phase import notes without restarting from scratch.
+
 ### 1. Initialize Project
 
 ```
@@ -225,6 +227,18 @@ One command, one flow. The system:
 You approve the roadmap. Now you're ready to build.
 
 **Creates:** `PROJECT.md`, `REQUIREMENTS.md`, `ROADMAP.md`, `STATE.md`, `.planning/research/`
+
+**Already have a plan instead of an idea doc?**
+
+```
+/gsd:import-plan @plan.md
+```
+
+This path:
+- saves the original imported plan under `.planning/imports/`
+- synthesizes or appends `PROJECT.md`, `REQUIREMENTS.md`, `ROADMAP.md`, and `STATE.md`
+- creates per-phase `NN-IMPORT.md` files so `/gsd:discuss-phase` and `/gsd:plan-phase` can keep using the imported baseline
+- treats existing GSD projects as milestone imports instead of wiping active work
 
 ---
 
@@ -567,6 +581,7 @@ You're never locked in. The system adapts.
 | Command | What it does |
 |---------|--------------|
 | `/gsd:new-project [--auto]` | Full initialization: questions → research → requirements → roadmap |
+| `/gsd:import-plan [--milestone <name>] [@file\|pasted plan]` | Convert an external agent-written plan into GSD artifacts and roadmap phases |
 | `/gsd:discuss-phase [N] [--auto] [--analyze]` | Capture implementation decisions before planning (`--analyze` adds trade-off analysis) |
 | `/gsd:plan-phase [N] [--auto] [--reviews]` | Research + plan + verify for a phase (`--reviews` loads codebase review findings) |
 | `/gsd:execute-phase <N>` | Execute all plans in parallel waves, verify when complete |

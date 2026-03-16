@@ -188,6 +188,7 @@ function safeReadFile(filePath) {
 function loadConfig(cwd) {
   const configPath = path.join(cwd, '.planning', 'config.json');
   const defaults = {
+    granularity: 'standard',
     model_profile: 'balanced',
     commit_docs: true,
     search_gitignored: false,
@@ -272,6 +273,7 @@ function loadConfig(cwd) {
     })();
 
     return {
+      granularity: get('granularity') ?? defaults.granularity,
       model_profile: get('model_profile') ?? defaults.model_profile,
       commit_docs: (() => {
         const explicit = get('commit_docs', { section: 'planning', field: 'commit_docs' });

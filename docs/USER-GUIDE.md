@@ -394,6 +394,7 @@ The `security.cjs` module scans for known injection patterns (role overrides, in
 |---------|---------|-------------|
 | `/gsd:new-project` | Full project init: questions, research, requirements, roadmap | Start of a new project |
 | `/gsd:new-project --auto @idea.md` | Automated init from document | Have a PRD or idea doc ready |
+| `/gsd:import-plan [--milestone <name>] [@file\|pasted plan]` | Convert an external agent-written plan into GSD artifacts and phases | You already have a phased plan from another agent |
 | `/gsd:discuss-phase [N]` | Capture implementation decisions | Before planning, to shape how it gets built |
 | `/gsd:ui-phase [N]` | Generate UI design contract | After discuss-phase, before plan-phase (frontend phases) |
 | `/gsd:plan-phase [N]` | Research + plan + verify | Before executing a phase |
