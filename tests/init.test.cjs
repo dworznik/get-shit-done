@@ -845,6 +845,12 @@ describe('cmdInitQuick', () => {
     // next_num must NOT be present
     assert.ok(!('next_num' in output), 'next_num should not be in output');
     assert.strictEqual(output.codex_supervisor_enabled, false, 'codex supervisor defaults off');
+    assert.strictEqual(typeof output.runtime_context, 'string');
+    assert.strictEqual(typeof output.codex_supervisor_transport, 'string');
+    assert.strictEqual(typeof output.codex_launch_command, 'string');
+    assert.strictEqual(typeof output.codex_boot_delay_ms, 'number');
+    assert.strictEqual(typeof output.codex_supervisor_timeout_seconds, 'number');
+    assert.strictEqual(typeof output.codex_supervisor_poll_ms, 'number');
   });
 
   test('without description returns null slug and task_dir', () => {

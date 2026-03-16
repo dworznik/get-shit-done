@@ -153,7 +153,7 @@ Execute a narrow feature, fix, or refactor through GSD's recommended slim workfl
 - Uses the quick-task substrate with stronger defaults
 - Runs `spec -> implement -> self-review -> verify`
 - Escalates to plan-checking only when the task is risky or too broad
-- Can emit Codex supervisor bundles before and after execution when `workflow.codex_supervisor` is enabled
+- Can run Codex supervisor pre/post checks automatically from Claude via tmux when `workflow.codex_supervisor` is enabled
 - Stores artifacts in `.planning/quick/` and updates STATE.md tracking
 
 Use when you want the default small-feature delivery path.
@@ -180,7 +180,7 @@ Execute small, ad-hoc tasks with GSD guarantees but skip optional agents.
 Quick mode uses the same system with a shorter path:
 - Spawns planner + executor (skips researcher, checker, verifier by default)
 - Quick tasks live in `.planning/quick/` separate from planned phases
-- Can emit Codex supervisor bundles before and after execution when `workflow.codex_supervisor` is enabled
+- Can run Codex supervisor pre/post checks automatically from Claude via tmux when `workflow.codex_supervisor` is enabled
 - Updates STATE.md tracking (not ROADMAP.md)
 
 Use when you already know exactly what to do and want the lowest-ceremony path.
@@ -217,7 +217,8 @@ Run the Codex supervisor against a generated quick/focus bundle.
 - Consumes `SUPERVISOR-PRE.json` or `SUPERVISOR-POST.json`
 - Focuses on spec gaps, stack compatibility, and implementation mismatches
 - Runs before or after Claude work; it does not nest a Claude session inside Codex
-- Writes `SUPERVISOR-FINDINGS.json` and `SUPERVISOR-REPORT.md`
+- Supports tmux-based handoff from Claude and direct execution inside Codex
+- Writes stage-specific findings, report, and status files plus latest-stage compatibility copies
 
 Usage: `/gsd:supervisor --bundle .planning/quick/<task>/SUPERVISOR-PRE.json --stage pre`
 

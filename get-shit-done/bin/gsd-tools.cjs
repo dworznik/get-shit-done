@@ -30,6 +30,8 @@
  *   history-digest                     Aggregate all SUMMARY.md data
  *   summary-extract <path> [--fields]  Extract structured data from SUMMARY.md
  *   supervisor-bundle <dir> --stage    Build supervisor input bundle for quick/focus
+ *   supervisor-launch <dir> --stage    Launch Codex supervisor via configured transport
+ *   supervisor-wait <dir> --stage      Wait for Codex supervisor completion
  *   supervisor-findings <path>         Normalize supervisor findings JSON
  *   state-snapshot                     Structured parse of STATE.md
  *   phase-plan-index <phase>           Index plans with waves and status
@@ -778,6 +780,22 @@ async function runCommand(command, args, cwd, raw) {
       const stageIndex = args.indexOf('--stage');
       const stage = stageIndex !== -1 ? args[stageIndex + 1] : null;
       commands.cmdSupervisorBundle(cwd, quickDir, stage, raw);
+      break;
+    }
+
+    case 'supervisor-launch': {
+      const quickDir = args[1];
+      const stageIndex = args.indexOf('--stage');
+      const stage = stageIndex !== -1 ? args[stageIndex + 1] : null;
+      commands.cmdSupervisorLaunch(cwd, quickDir, stage, raw);
+      break;
+    }
+
+    case 'supervisor-wait': {
+      const quickDir = args[1];
+      const stageIndex = args.indexOf('--stage');
+      const stage = stageIndex !== -1 ? args[stageIndex + 1] : null;
+      commands.cmdSupervisorWait(cwd, quickDir, stage, raw);
       break;
     }
 
