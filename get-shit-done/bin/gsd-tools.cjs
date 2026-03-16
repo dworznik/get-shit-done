@@ -118,6 +118,7 @@
  *   init plan-phase <phase>            All context for plan-phase workflow
  *   init new-project                   All context for new-project workflow
  *   init new-milestone                 All context for new-milestone workflow
+ *   init import-plan                   All context for import-plan workflow
  *   init quick <description>           All context for quick workflow
  *   init focus-stack <description>     All context for stacked focus workflow
  *   init resume                        All context for resume-project workflow
@@ -528,6 +529,9 @@ async function main() {
         case 'new-milestone':
           init.cmdInitNewMilestone(cwd, raw);
           break;
+        case 'import-plan':
+          init.cmdInitImportPlan(cwd, raw);
+          break;
         case 'quick':
           init.cmdInitQuick(cwd, args.slice(2).join(' '), raw);
           break;
@@ -556,7 +560,7 @@ async function main() {
           init.cmdInitProgress(cwd, raw);
           break;
         default:
-          error(`Unknown init workflow: ${workflow}\nAvailable: execute-phase, plan-phase, new-project, new-milestone, quick, focus-stack, resume, verify-work, phase-op, todos, milestone-op, map-codebase, progress`);
+          error(`Unknown init workflow: ${workflow}\nAvailable: execute-phase, plan-phase, new-project, new-milestone, import-plan, quick, focus-stack, resume, verify-work, phase-op, todos, milestone-op, map-codebase, progress`);
       }
       break;
     }

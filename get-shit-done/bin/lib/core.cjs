@@ -18,6 +18,7 @@ function toPosixPath(p) {
 const MODEL_PROFILES = {
   'gsd-planner':              { quality: 'opus', balanced: 'opus',   budget: 'sonnet' },
   'gsd-roadmapper':           { quality: 'opus', balanced: 'sonnet', budget: 'sonnet' },
+  'gsd-plan-importer':        { quality: 'opus', balanced: 'sonnet', budget: 'sonnet' },
   'gsd-executor':             { quality: 'opus', balanced: 'sonnet', budget: 'sonnet' },
   'gsd-phase-researcher':     { quality: 'opus', balanced: 'sonnet', budget: 'haiku' },
   'gsd-project-researcher':   { quality: 'opus', balanced: 'sonnet', budget: 'haiku' },
@@ -68,6 +69,7 @@ function safeReadFile(filePath) {
 function loadConfig(cwd) {
   const configPath = path.join(cwd, '.planning', 'config.json');
   const defaults = {
+    granularity: 'standard',
     model_profile: 'balanced',
     commit_docs: true,
     search_gitignored: false,
@@ -111,6 +113,7 @@ function loadConfig(cwd) {
     })();
 
     return {
+      granularity: get('granularity') ?? defaults.granularity,
       model_profile: get('model_profile') ?? defaults.model_profile,
       commit_docs: get('commit_docs', { section: 'planning', field: 'commit_docs' }) ?? defaults.commit_docs,
       search_gitignored: get('search_gitignored', { section: 'planning', field: 'search_gitignored' }) ?? defaults.search_gitignored,

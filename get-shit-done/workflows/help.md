@@ -12,7 +12,8 @@ Display the complete GSD command reference. Output ONLY the reference content. D
 1. `/gsd:focus` - Run the recommended fast path for one small bounded task
 2. `/gsd:focus-stack` - Deliver several bounded slices as managed stacked PRs
 3. `/gsd:new-project` - Initialize a project when the work needs roadmap structure
-4. `/gsd:plan-phase 1` - Create detailed plan for the first roadmap phase
+4. `/gsd:import-plan @plan.md` - Convert an external plan into GSD phases
+5. `/gsd:plan-phase 1` - Create detailed plan for the first roadmap phase
 
 ## Staying Updated
 
@@ -25,7 +26,7 @@ npx get-shit-done-cc@latest
 ## Core Workflow
 
 ```
-/gsd:new-project → /gsd:plan-phase → /gsd:execute-phase → repeat
+(/gsd:new-project or /gsd:import-plan) → /gsd:plan-phase → /gsd:execute-phase → repeat
 ```
 
 ### Project Initialization
@@ -48,6 +49,17 @@ Creates all `.planning/` artifacts:
 - `STATE.md` — project memory
 
 Usage: `/gsd:new-project`
+
+**`/gsd:import-plan [@file|pasted plan]`**
+Convert an agent-written markdown plan into GSD planning artifacts.
+
+- Saves the raw source plan under `.planning/imports/`
+- Synthesizes or appends `PROJECT.md`, `REQUIREMENTS.md`, `ROADMAP.md`, and `STATE.md`
+- Creates per-phase `NN-IMPORT.md` files that `/gsd:discuss-phase` and `/gsd:plan-phase` can read
+- Uses fresh-project bootstrap on a new repo and future-milestone import on an existing GSD project
+
+Usage: `/gsd:import-plan @plan.md`
+Usage: `/gsd:import-plan --milestone "v2.0 Parser" @plan.md`
 
 **`/gsd:map-codebase`**
 Map an existing codebase for brownfield projects.

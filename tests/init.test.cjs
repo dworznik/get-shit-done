@@ -37,6 +37,7 @@ describe('init commands', () => {
     const phaseDir = path.join(tmpDir, '.planning', 'phases', '03-api');
     fs.mkdirSync(phaseDir, { recursive: true });
     fs.writeFileSync(path.join(phaseDir, '03-CONTEXT.md'), '# Phase Context');
+    fs.writeFileSync(path.join(phaseDir, '03-IMPORT.md'), '# Imported Notes');
     fs.writeFileSync(path.join(phaseDir, '03-RESEARCH.md'), '# Research Findings');
     fs.writeFileSync(path.join(phaseDir, '03-VERIFICATION.md'), '# Verification');
     fs.writeFileSync(path.join(phaseDir, '03-UAT.md'), '# UAT');
@@ -49,6 +50,7 @@ describe('init commands', () => {
     assert.strictEqual(output.roadmap_path, '.planning/ROADMAP.md');
     assert.strictEqual(output.requirements_path, '.planning/REQUIREMENTS.md');
     assert.strictEqual(output.context_path, '.planning/phases/03-api/03-CONTEXT.md');
+    assert.strictEqual(output.import_path, '.planning/phases/03-api/03-IMPORT.md');
     assert.strictEqual(output.research_path, '.planning/phases/03-api/03-RESEARCH.md');
     assert.strictEqual(output.verification_path, '.planning/phases/03-api/03-VERIFICATION.md');
     assert.strictEqual(output.uat_path, '.planning/phases/03-api/03-UAT.md');
@@ -92,6 +94,7 @@ describe('init commands', () => {
     const phaseDir = path.join(tmpDir, '.planning', 'phases', '03-api');
     fs.mkdirSync(phaseDir, { recursive: true });
     fs.writeFileSync(path.join(phaseDir, '03-CONTEXT.md'), '# Phase Context');
+    fs.writeFileSync(path.join(phaseDir, '03-IMPORT.md'), '# Imported Notes');
     fs.writeFileSync(path.join(phaseDir, '03-RESEARCH.md'), '# Research');
     fs.writeFileSync(path.join(phaseDir, '03-VERIFICATION.md'), '# Verification');
     fs.writeFileSync(path.join(phaseDir, '03-UAT.md'), '# UAT');
@@ -104,6 +107,7 @@ describe('init commands', () => {
     assert.strictEqual(output.roadmap_path, '.planning/ROADMAP.md');
     assert.strictEqual(output.requirements_path, '.planning/REQUIREMENTS.md');
     assert.strictEqual(output.context_path, '.planning/phases/03-api/03-CONTEXT.md');
+    assert.strictEqual(output.import_path, '.planning/phases/03-api/03-IMPORT.md');
     assert.strictEqual(output.research_path, '.planning/phases/03-api/03-RESEARCH.md');
     assert.strictEqual(output.verification_path, '.planning/phases/03-api/03-VERIFICATION.md');
     assert.strictEqual(output.uat_path, '.planning/phases/03-api/03-UAT.md');
@@ -118,6 +122,7 @@ describe('init commands', () => {
 
     const output = JSON.parse(result.output);
     assert.strictEqual(output.context_path, undefined);
+    assert.strictEqual(output.import_path, undefined);
     assert.strictEqual(output.research_path, undefined);
   });
 
@@ -885,6 +890,62 @@ describe('cmdInitNewMilestone', () => {
     assert.strictEqual(output2.state_exists, true);
     assert.strictEqual(output2.roadmap_exists, true);
     assert.strictEqual(output2.project_exists, true);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// cmdInitImportPlan (INIT-07)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('cmdInitImportPlan', () => {
+  let tmpDir;
+
+  beforeEach(() => {
+    tmpDir = createTempProject();
+  });
+
+  afterEach(() => {
+    cleanup(tmpDir);
+  });
+
+  test('fresh repo defaults to bootstrap mode and phase 1', () => {
+    const result = runGsdTools('init import-plan', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.mode, 'bootstrap');
+    assert.strictEqual(output.project_exists, false);
+    assert.strictEqual(output.next_phase_number, '1');
+    assert.strictEqual(output.next_phase_padded, '01');
+    assert.strictEqual(output.imports_dir, '.planning/imports');
+    assert.ok(/^\d{6}-[0-9a-z]{3}$/.test(output.import_id), `unexpected import_id: ${output.import_id}`);
+  });
+
+  test('existing project defaults to milestone mode and computes next phase', () => {
+    fs.writeFileSync(path.join(tmpDir, '.planning', 'PROJECT.md'), '# Project\n');
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'ROADMAP.md'),
+      [
+        '# Roadmap',
+        '',
+        '### Phase 3: API',
+        '**Goal:** Build API',
+        '',
+        '### Phase 4: UI',
+        '**Goal:** Build UI',
+        '',
+      ].join('\n')
+    );
+
+    const result = runGsdTools('init import-plan', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.mode, 'milestone');
+    assert.strictEqual(output.project_exists, true);
+    assert.strictEqual(output.roadmap_exists, true);
+    assert.strictEqual(output.next_phase_number, '5');
+    assert.strictEqual(output.next_phase_padded, '05');
   });
 });
 
