@@ -3,9 +3,11 @@
  */
 const fs = require('fs');
 const path = require('path');
-const { execSync } = require('child_process');
-const { safeReadFile, loadConfig, isGitIgnored, execGit, normalizePhaseName, comparePhaseNum, getArchivedPhaseDirs, generateSlugInternal, getMilestoneInfo, resolveModelInternal, MODEL_PROFILES, toPosixPath, output, error, findPhaseInternal } = require('./core.cjs');
+const { execSync, execFileSync } = require('child_process');
+const { safeReadFile, loadConfig, isGitIgnored, execGit, normalizePhaseName, comparePhaseNum, getArchivedPhaseDirs, generateSlugInternal, getMilestoneInfo, resolveModelInternal, MODEL_PROFILES, toPosixPath, output, error, findPhaseInternal, detectRuntimeContext } = require('./core.cjs');
 const { extractFrontmatter, parseMustHavesBlock } = require('./frontmatter.cjs');
+
+const SUPERVISOR_TERMINAL_STATES = new Set(['passed', 'warnings', 'blocked', 'failed', 'timeout']);
 
 function readJsonIfExists(filePath) {
   try {
@@ -50,6 +52,132 @@ function findQuickArtifact(fullDir, suffix) {
 
 function toRelOrNull(cwd, filePath) {
   return filePath ? toPosixPath(path.relative(cwd, filePath)) : null;
+}
+
+function shellEscape(value) {
+  return `'${String(value).replace(/'/g, `'\\''`)}'`;
+}
+
+function sleepMs(ms) {
+  if (!ms || ms <= 0) return;
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+function supervisorArtifactPaths(fullPath, relPath, stage) {
+  const upper = stage === 'pre' ? 'PRE' : 'POST';
+  const bundleName = `SUPERVISOR-${upper}.json`;
+  const statusName = `SUPERVISOR-${upper}-STATUS.json`;
+  const findingsName = `SUPERVISOR-${upper}-FINDINGS.json`;
+  const reportName = `SUPERVISOR-${upper}-REPORT.md`;
+
+  return {
+    abs: {
+      bundle: path.join(fullPath, bundleName),
+      status: path.join(fullPath, statusName),
+      findings: path.join(fullPath, findingsName),
+      report: path.join(fullPath, reportName),
+      latestFindings: path.join(fullPath, 'SUPERVISOR-FINDINGS.json'),
+      latestReport: path.join(fullPath, 'SUPERVISOR-REPORT.md'),
+    },
+    rel: {
+      bundle: toPosixPath(path.join(relPath, bundleName)),
+      status: toPosixPath(path.join(relPath, statusName)),
+      findings: toPosixPath(path.join(relPath, findingsName)),
+      report: toPosixPath(path.join(relPath, reportName)),
+      latestFindings: toPosixPath(path.join(relPath, 'SUPERVISOR-FINDINGS.json')),
+      latestReport: toPosixPath(path.join(relPath, 'SUPERVISOR-REPORT.md')),
+    },
+  };
+}
+
+function writeJsonFile(filePath, value) {
+  fs.writeFileSync(filePath, JSON.stringify(value, null, 2), 'utf-8');
+}
+
+function readSupervisorStatus(filePath) {
+  return readJsonIfExists(filePath);
+}
+
+function updateLatestSupervisorOutputs(paths) {
+  if (fs.existsSync(paths.abs.findings)) {
+    fs.copyFileSync(paths.abs.findings, paths.abs.latestFindings);
+  }
+  if (fs.existsSync(paths.abs.report)) {
+    fs.copyFileSync(paths.abs.report, paths.abs.latestReport);
+  }
+}
+
+function findSourceJsonArtifacts(fullPath) {
+  try {
+    return fs.readdirSync(fullPath)
+      .filter(name => name.endsWith('.json'))
+      .filter(name => !(
+        name === 'RUN_MANIFEST.json' ||
+        /^SUPERVISOR-(PRE|POST)(-STATUS|-FINDINGS)?\.json$/.test(name) ||
+        name === 'SUPERVISOR-FINDINGS.json'
+      ))
+      .sort();
+  } catch {
+    return [];
+  }
+}
+
+function resolveCodexSupervisorTransport(config, runtime, env = process.env) {
+  const configured = config.codex_supervisor_transport || 'auto';
+  if (configured !== 'auto') {
+    return {
+      configured,
+      resolved: configured,
+      error: configured === 'tmux' && !env.TMUX
+        ? 'workflow.codex_supervisor_transport=tmux requires TMUX to be set.'
+        : null,
+    };
+  }
+
+  if (runtime === 'codex') {
+    return { configured, resolved: 'direct', error: null };
+  }
+
+  if (runtime === 'claude' && env.TMUX) {
+    return { configured, resolved: 'tmux', error: null };
+  }
+
+  return {
+    configured,
+    resolved: 'unavailable',
+    error: 'workflow.codex_supervisor_transport=auto requires Codex runtime or a Claude session running inside tmux.',
+  };
+}
+
+function ensureCommandExists(command) {
+  try {
+    execSync(`command -v ${shellEscape(command)}`, {
+      stdio: 'pipe',
+      shell: '/bin/zsh',
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function supervisorBaseStatus({ manifest, stage, runtime, transport, paths, launchCommand, tmuxTarget, windowName, errorMessage }) {
+  return {
+    run_id: manifest.run_id || path.basename(paths.abs.bundle, '.json'),
+    stage,
+    runtime,
+    transport,
+    state: 'pending',
+    bundle_path: paths.rel.bundle,
+    findings_path: paths.rel.findings,
+    report_path: paths.rel.report,
+    tmux_target: tmuxTarget || null,
+    window_name: windowName || null,
+    launch_command: launchCommand || null,
+    started_at: null,
+    completed_at: null,
+    error: errorMessage || null,
+  };
 }
 
 function markdownSection(content, heading) {
@@ -285,6 +413,7 @@ function cmdSupervisorBundle(cwd, quickDirArg, stage, raw) {
   const { fullPath, relPath } = parseQuickDir(cwd, quickDirArg);
   const manifestPath = path.join(fullPath, 'RUN_MANIFEST.json');
   const manifest = readJsonIfExists(manifestPath) || {};
+  const paths = supervisorArtifactPaths(fullPath, relPath, stage);
 
   const planPath = manifest.plan_path
     ? path.join(cwd, manifest.plan_path)
@@ -338,11 +467,18 @@ function cmdSupervisorBundle(cwd, quickDirArg, stage, raw) {
       summary_path: toRelOrNull(cwd, summaryPath),
       verification_path: toRelOrNull(cwd, verificationPath),
       stack_state_path: manifest.stack_state_path || stackContext?.state_path || null,
-      findings_path: toPosixPath(path.join(relPath, 'SUPERVISOR-FINDINGS.json')),
-      report_path: toPosixPath(path.join(relPath, 'SUPERVISOR-REPORT.md')),
+      bundle_path: paths.rel.bundle,
+      status_path: paths.rel.status,
+      findings_path: paths.rel.findings,
+      report_path: paths.rel.report,
+      latest_findings_path: paths.rel.latestFindings,
+      latest_report_path: paths.rel.latestReport,
     },
     plan,
     stack_context: stackContext,
+    source_artifacts: {
+      json_sidecars: findSourceJsonArtifacts(fullPath).map(name => toPosixPath(path.join(relPath, name))),
+    },
   };
 
   if (stage === 'post') {
@@ -362,14 +498,13 @@ function cmdSupervisorBundle(cwd, quickDirArg, stage, raw) {
     };
   }
 
-  const bundlePath = path.join(fullPath, stage === 'pre' ? 'SUPERVISOR-PRE.json' : 'SUPERVISOR-POST.json');
-  fs.writeFileSync(bundlePath, JSON.stringify(bundle, null, 2), 'utf-8');
+  fs.writeFileSync(paths.abs.bundle, JSON.stringify(bundle, null, 2), 'utf-8');
 
   output({
     stage,
-    bundle_path: toRelOrNull(cwd, bundlePath),
+    bundle_path: paths.rel.bundle,
     quick_dir: relPath,
-  }, raw, toRelOrNull(cwd, bundlePath));
+  }, raw, paths.rel.bundle);
 }
 
 function cmdSupervisorFindings(cwd, findingsPathArg, raw) {
@@ -386,6 +521,194 @@ function cmdSupervisorFindings(cwd, findingsPathArg, raw) {
   const normalized = normalizeSupervisorFindings(fs.readFileSync(fullPath, 'utf-8'));
   normalized.path = toPosixPath(path.relative(cwd, fullPath));
   output(normalized, raw, normalized.status);
+}
+
+function cmdSupervisorLaunch(cwd, quickDirArg, stage, raw) {
+  if (!stage || !['pre', 'post'].includes(stage)) {
+    error('Usage: supervisor-launch <quick_dir> --stage pre|post');
+  }
+
+  const { fullPath, relPath } = parseQuickDir(cwd, quickDirArg);
+  const paths = supervisorArtifactPaths(fullPath, relPath, stage);
+  const manifest = readJsonIfExists(path.join(fullPath, 'RUN_MANIFEST.json')) || {};
+  const config = loadConfig(cwd);
+  const runtime = detectRuntimeContext();
+  const transport = resolveCodexSupervisorTransport(config, runtime);
+  const launchCommand = config.codex_launch_command || 'codex';
+  const runId = manifest.run_id || path.basename(fullPath);
+  const windowName = `gsd-supervisor-${runId.replace(/[^a-zA-Z0-9-]/g, '-')}-${stage}`;
+
+  if (!fs.existsSync(paths.abs.bundle)) {
+    error(`Supervisor bundle not found: ${paths.rel.bundle}. Run supervisor-bundle first.`);
+  }
+
+  const fail = (message) => {
+    const status = supervisorBaseStatus({
+      manifest,
+      stage,
+      runtime,
+      transport: transport.resolved,
+      paths,
+      launchCommand,
+      windowName,
+      errorMessage: message,
+    });
+    status.state = 'failed';
+    status.completed_at = new Date().toISOString();
+    writeJsonFile(paths.abs.status, status);
+    output(status, raw, 'failed');
+  };
+
+  if (transport.error) {
+    return fail(transport.error);
+  }
+
+  if (transport.resolved !== 'tmux') {
+    return fail(`supervisor-launch only supports tmux transport, resolved transport was "${transport.resolved}".`);
+  }
+
+  if (!process.env.TMUX) {
+    return fail('TMUX is not set. Start the Claude session inside tmux before enabling automated Codex supervisor handoff.');
+  }
+
+  if (!ensureCommandExists('tmux')) {
+    return fail('tmux is not installed or not available on PATH.');
+  }
+
+  const status = supervisorBaseStatus({
+    manifest,
+    stage,
+    runtime,
+    transport: 'tmux',
+    paths,
+    launchCommand,
+    windowName,
+  });
+  status.state = 'launching';
+  status.started_at = new Date().toISOString();
+  writeJsonFile(paths.abs.status, status);
+
+  let tmuxTarget = null;
+  try {
+    tmuxTarget = execFileSync('tmux', [
+      'new-window',
+      '-P',
+      '-F',
+      '#{session_name}:#{window_index}',
+      '-n',
+      windowName,
+      '-c',
+      cwd,
+      launchCommand,
+    ], {
+      cwd,
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    }).trim();
+  } catch (err) {
+    return fail(`Failed to create tmux window: ${String(err.stderr || err.message || '').trim()}`);
+  }
+
+  status.tmux_target = tmuxTarget || null;
+  writeJsonFile(paths.abs.status, status);
+
+  sleepMs(Math.max(0, Number(config.codex_boot_delay_ms) || 0));
+
+  const bootstrap = [
+    '$gsd-supervisor',
+    '--bundle', shellEscape(paths.abs.bundle),
+    '--stage', stage,
+    '--status', shellEscape(paths.abs.status),
+    '--findings', shellEscape(paths.abs.findings),
+    '--report', shellEscape(paths.abs.report),
+  ].join(' ');
+
+  try {
+    execFileSync('tmux', ['send-keys', '-t', tmuxTarget, '-l', bootstrap], {
+      cwd,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    execFileSync('tmux', ['send-keys', '-t', tmuxTarget, 'Enter'], {
+      cwd,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+  } catch (err) {
+    return fail(`Failed to send bootstrap command to tmux window: ${String(err.stderr || err.message || '').trim()}`);
+  }
+
+  status.state = 'running';
+  writeJsonFile(paths.abs.status, status);
+  output(status, raw, tmuxTarget || 'running');
+}
+
+function cmdSupervisorWait(cwd, quickDirArg, stage, raw) {
+  if (!stage || !['pre', 'post'].includes(stage)) {
+    error('Usage: supervisor-wait <quick_dir> --stage pre|post');
+  }
+
+  const { fullPath, relPath } = parseQuickDir(cwd, quickDirArg);
+  const paths = supervisorArtifactPaths(fullPath, relPath, stage);
+  const config = loadConfig(cwd);
+  const pollMs = Math.max(100, Number(config.codex_supervisor_poll_ms) || 2000);
+  const timeoutMs = Math.max(pollMs, (Number(config.codex_supervisor_timeout_seconds) || 1800) * 1000);
+  const started = Date.now();
+  let status = readSupervisorStatus(paths.abs.status);
+
+  if (!status) {
+    error(`Supervisor status file not found: ${paths.rel.status}. Run supervisor-launch first.`);
+  }
+
+  while (!SUPERVISOR_TERMINAL_STATES.has(status.state)) {
+    if (Date.now() - started >= timeoutMs) {
+      status.state = 'timeout';
+      status.completed_at = new Date().toISOString();
+      status.error = status.error || `Timed out waiting for supervisor after ${Math.round(timeoutMs / 1000)} seconds.`;
+      writeJsonFile(paths.abs.status, status);
+      break;
+    }
+
+    if (status.tmux_target && ensureCommandExists('tmux')) {
+      try {
+        execFileSync('tmux', ['has-session', '-t', status.tmux_target], {
+          cwd,
+          stdio: ['ignore', 'pipe', 'pipe'],
+        });
+      } catch {
+        status.state = 'failed';
+        status.completed_at = new Date().toISOString();
+        status.error = status.error || `Supervisor tmux window exited before writing a terminal status: ${status.tmux_target}`;
+        writeJsonFile(paths.abs.status, status);
+        break;
+      }
+    }
+
+    sleepMs(pollMs);
+    status = readSupervisorStatus(paths.abs.status) || status;
+  }
+
+  if (status.state === 'passed' || status.state === 'warnings' || status.state === 'blocked') {
+    updateLatestSupervisorOutputs(paths);
+  }
+
+  if (status.tmux_target && ensureCommandExists('tmux')) {
+    const keepOnFailure = !!config.codex_keep_window_on_failure;
+    const keepOnSuccess = !!config.codex_keep_window_on_success;
+    const shouldKill =
+      ((status.state === 'passed' || status.state === 'warnings' || status.state === 'blocked') && !keepOnSuccess) ||
+      ((status.state === 'failed' || status.state === 'timeout') && !keepOnFailure);
+
+    if (shouldKill) {
+      try {
+        execFileSync('tmux', ['kill-window', '-t', status.tmux_target], {
+          cwd,
+          stdio: ['ignore', 'pipe', 'pipe'],
+        });
+      } catch {}
+    }
+  }
+
+  status.path = paths.rel.status;
+  output(status, raw, status.state);
 }
 
 function cmdGenerateSlug(text, raw) {
@@ -923,6 +1246,8 @@ module.exports = {
   cmdCommit,
   cmdSummaryExtract,
   cmdSupervisorBundle,
+  cmdSupervisorLaunch,
+  cmdSupervisorWait,
   cmdSupervisorFindings,
   cmdWebsearch,
   cmdProgressRender,

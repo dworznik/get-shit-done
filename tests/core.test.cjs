@@ -62,6 +62,13 @@ describe('loadConfig', () => {
     assert.strictEqual(config.parallelization, true);
     assert.strictEqual(config.nyquist_validation, true);
     assert.strictEqual(config.codex_supervisor, false);
+    assert.strictEqual(config.codex_supervisor_transport, 'auto');
+    assert.strictEqual(config.codex_launch_command, 'codex');
+    assert.strictEqual(config.codex_boot_delay_ms, 1500);
+    assert.strictEqual(config.codex_supervisor_timeout_seconds, 1800);
+    assert.strictEqual(config.codex_supervisor_poll_ms, 2000);
+    assert.strictEqual(config.codex_keep_window_on_failure, true);
+    assert.strictEqual(config.codex_keep_window_on_success, false);
   });
 
   test('reads model_profile from config.json', () => {

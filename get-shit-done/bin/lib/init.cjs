@@ -5,7 +5,34 @@
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
-const { loadConfig, resolveModelInternal, findPhaseInternal, getRoadmapPhaseInternal, pathExistsInternal, generateSlugInternal, getMilestoneInfo, normalizePhaseName, toPosixPath, output, error } = require('./core.cjs');
+const { loadConfig, resolveModelInternal, findPhaseInternal, getRoadmapPhaseInternal, pathExistsInternal, generateSlugInternal, getMilestoneInfo, normalizePhaseName, toPosixPath, output, error, detectRuntimeContext } = require('./core.cjs');
+
+function resolveCodexSupervisorTransport(config, runtime) {
+  const configured = config.codex_supervisor_transport || 'auto';
+  if (configured !== 'auto') {
+    return {
+      configured,
+      resolved: configured,
+      error: configured === 'tmux' && !process.env.TMUX
+        ? 'workflow.codex_supervisor_transport=tmux requires TMUX to be set.'
+        : null,
+    };
+  }
+
+  if (runtime === 'codex') {
+    return { configured, resolved: 'direct', error: null };
+  }
+
+  if (runtime === 'claude' && process.env.TMUX) {
+    return { configured, resolved: 'tmux', error: null };
+  }
+
+  return {
+    configured,
+    resolved: 'unavailable',
+    error: 'workflow.codex_supervisor_transport=auto requires Codex runtime or a Claude session running inside tmux.',
+  };
+}
 
 function cmdInitExecutePhase(cwd, phase, raw) {
   if (!phase) {
@@ -335,6 +362,8 @@ function cmdInitImportPlan(cwd, raw) {
 
 function cmdInitQuick(cwd, description, raw) {
   const config = loadConfig(cwd);
+  const runtime = detectRuntimeContext();
+  const supervisorTransport = resolveCodexSupervisorTransport(config, runtime);
   const now = new Date();
   const slug = description ? generateSlugInternal(description)?.substring(0, 40) : null;
 
@@ -361,6 +390,16 @@ function cmdInitQuick(cwd, description, raw) {
     // Config
     commit_docs: config.commit_docs,
     codex_supervisor_enabled: config.codex_supervisor,
+    runtime_context: runtime,
+    codex_supervisor_transport_configured: supervisorTransport.configured,
+    codex_supervisor_transport: supervisorTransport.resolved,
+    codex_supervisor_transport_error: supervisorTransport.error,
+    codex_launch_command: config.codex_launch_command,
+    codex_boot_delay_ms: config.codex_boot_delay_ms,
+    codex_supervisor_timeout_seconds: config.codex_supervisor_timeout_seconds,
+    codex_supervisor_poll_ms: config.codex_supervisor_poll_ms,
+    codex_keep_window_on_failure: config.codex_keep_window_on_failure,
+    codex_keep_window_on_success: config.codex_keep_window_on_success,
 
     // Quick task info
     quick_id: quickId,

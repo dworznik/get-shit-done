@@ -81,6 +81,13 @@ function loadConfig(cwd) {
     verifier: true,
     nyquist_validation: true,
     codex_supervisor: false,
+    codex_supervisor_transport: 'auto',
+    codex_launch_command: 'codex',
+    codex_boot_delay_ms: 1500,
+    codex_supervisor_timeout_seconds: 1800,
+    codex_supervisor_poll_ms: 2000,
+    codex_keep_window_on_failure: true,
+    codex_keep_window_on_success: false,
     parallelization: true,
     brave_search: false,
   };
@@ -125,6 +132,13 @@ function loadConfig(cwd) {
       verifier: get('verifier', { section: 'workflow', field: 'verifier' }) ?? defaults.verifier,
       nyquist_validation: get('nyquist_validation', { section: 'workflow', field: 'nyquist_validation' }) ?? defaults.nyquist_validation,
       codex_supervisor: get('codex_supervisor', { section: 'workflow', field: 'codex_supervisor' }) ?? defaults.codex_supervisor,
+      codex_supervisor_transport: get('codex_supervisor_transport', { section: 'workflow', field: 'codex_supervisor_transport' }) ?? defaults.codex_supervisor_transport,
+      codex_launch_command: get('codex_launch_command', { section: 'workflow', field: 'codex_launch_command' }) ?? defaults.codex_launch_command,
+      codex_boot_delay_ms: get('codex_boot_delay_ms', { section: 'workflow', field: 'codex_boot_delay_ms' }) ?? defaults.codex_boot_delay_ms,
+      codex_supervisor_timeout_seconds: get('codex_supervisor_timeout_seconds', { section: 'workflow', field: 'codex_supervisor_timeout_seconds' }) ?? defaults.codex_supervisor_timeout_seconds,
+      codex_supervisor_poll_ms: get('codex_supervisor_poll_ms', { section: 'workflow', field: 'codex_supervisor_poll_ms' }) ?? defaults.codex_supervisor_poll_ms,
+      codex_keep_window_on_failure: get('codex_keep_window_on_failure', { section: 'workflow', field: 'codex_keep_window_on_failure' }) ?? defaults.codex_keep_window_on_failure,
+      codex_keep_window_on_success: get('codex_keep_window_on_success', { section: 'workflow', field: 'codex_keep_window_on_success' }) ?? defaults.codex_keep_window_on_success,
       parallelization,
       brave_search: get('brave_search') ?? defaults.brave_search,
       model_overrides: parsed.model_overrides || null,
@@ -403,6 +417,25 @@ function generateSlugInternal(text) {
   return text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 }
 
+function detectRuntimeContext(invocationPath = process.argv[1] || '') {
+  const forced = (process.env.GSD_RUNTIME || '').trim().toLowerCase();
+  if (forced) return forced;
+
+  const candidates = [
+    invocationPath,
+    process.env.CLAUDE_CONFIG_DIR || '',
+    process.env.CODEX_HOME || '',
+    process.env.GEMINI_CONFIG_DIR || '',
+    process.env.OPENCODE_CONFIG_DIR || '',
+  ].map(value => String(value).replace(/\\/g, '/').toLowerCase());
+
+  if (candidates.some(value => value.includes('/.codex/'))) return 'codex';
+  if (candidates.some(value => value.includes('/.gemini/'))) return 'gemini';
+  if (candidates.some(value => value.includes('/.opencode/'))) return 'opencode';
+  if (candidates.some(value => value.includes('/.claude/'))) return 'claude';
+  return 'claude';
+}
+
 function getMilestoneInfo(cwd) {
   try {
     const roadmap = fs.readFileSync(path.join(cwd, '.planning', 'ROADMAP.md'), 'utf-8');
@@ -491,6 +524,7 @@ module.exports = {
   resolveModelInternal,
   pathExistsInternal,
   generateSlugInternal,
+  detectRuntimeContext,
   getMilestoneInfo,
   getMilestonePhaseFilter,
   toPosixPath,
