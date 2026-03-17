@@ -17,7 +17,8 @@ This command is Codex-only. It does not execute Claude Code inside Codex.
 It reads a generated supervisor bundle, spawns the read-only `gsd-supervisor` agent,
 then writes:
 - stage-specific findings, report, and status files
-- compatibility copies at `SUPERVISOR-FINDINGS.json` and `SUPERVISOR-REPORT.md`
+- compatibility copies at `SUPERVISOR-FINDINGS.json` / `SUPERVISOR-REPORT.md` for quick bundles
+- compatibility copies at `PHASE-SUPERVISOR-FINDINGS.json` / `PHASE-SUPERVISOR-REPORT.md` for phase bundles
 </objective>
 
 <context>
@@ -34,7 +35,7 @@ If either is missing, stop with a clear usage error.
 
 <process>
 1. Verify the bundle file exists.
-2. Derive `QUICK_DIR=$(dirname "$BUNDLE_PATH")`.
+2. Derive `ARTIFACT_DIR=$(dirname "$BUNDLE_PATH")`.
 3. Resolve output paths:
    - quick/focus stages use `SUPERVISOR-${STAGE^^}-*`
    - phase stages use `PHASE-SUPERVISOR-${STAGE^^}-*`
@@ -64,7 +65,9 @@ If either is missing, stop with a clear usage error.
    - stage
    - overall status
    - one section per finding with severity, category, evidence, and recommended action
-8. Copy the resolved findings/report to `${QUICK_DIR}/SUPERVISOR-FINDINGS.json` and `${QUICK_DIR}/SUPERVISOR-REPORT.md`.
+8. Copy the resolved findings/report to compatibility paths:
+   - quick/focus: `${ARTIFACT_DIR}/SUPERVISOR-FINDINGS.json` and `${ARTIFACT_DIR}/SUPERVISOR-REPORT.md`
+   - phase: `${ARTIFACT_DIR}/PHASE-SUPERVISOR-FINDINGS.json` and `${ARTIFACT_DIR}/PHASE-SUPERVISOR-REPORT.md`
 9. Write a terminal status payload with:
    - `state` set to `passed`, `warnings`, or `blocked`
    - `completed_at`
@@ -79,6 +82,8 @@ Findings: {count}
 Findings file: {path}
 Report file: {path}
 ```
+
+For phase bundles, `Stage` is `plan` or `execute`.
 
 If the supervisor returns no findings, write an empty `findings: []` payload with `status: passed`.
 If bundle parsing or analysis fails, still write a terminal status file with `state: failed` and include the error text.

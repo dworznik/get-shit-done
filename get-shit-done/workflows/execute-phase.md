@@ -770,19 +770,86 @@ node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" supervisor-wait "$PHASE_DIR
 
 After the supervisor completes:
 - verify `${PHASE_DIR}/PHASE-SUPERVISOR-EXECUTE-FINDINGS.json` exists
-- read findings and state:
+- read findings, report, and state:
 ```bash
 SUPERVISOR_EXECUTE=$(node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" supervisor-findings "${PHASE_DIR}/PHASE-SUPERVISOR-EXECUTE-FINDINGS.json")
 if [[ "$SUPERVISOR_EXECUTE" == @file:* ]]; then SUPERVISOR_EXECUTE=$(cat "${SUPERVISOR_EXECUTE#@file:}"); fi
+SUPERVISOR_EXECUTE_REPORT=$(cat "${PHASE_DIR}/PHASE-SUPERVISOR-EXECUTE-REPORT.md" 2>/dev/null || true)
 SUPERVISOR_EXECUTE_STATE=$(node -e 'const fs = require("fs"); const data = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); process.stdout.write(data.state || "failed");' "${PHASE_DIR}/PHASE-SUPERVISOR-EXECUTE-STATUS.json")
 ```
 - update `PHASE_RUN_MANIFEST.json` `supervisor_execute_status`
 - when tmux transport ran, also update `supervisor_execute_tmux_target`
 
 Gate behavior:
-- `blocked`, `failed`, or `timeout` → stop before `phase complete`, before ROADMAP/STATE/REQUIREMENTS updates, and before transition/auto-advance
+- `blocked` → enter the execute supervisor revision loop (step 9.75)
+- `failed` or `timeout` → stop before `phase complete`, before ROADMAP/STATE/REQUIREMENTS updates, and before transition/auto-advance
 - `warnings` → continue but keep findings recorded in the manifest
 - `passed` → continue normally
+</step>
+
+<step name="codex_supervisor_execute_revision_loop">
+Run this step only when `SUPERVISOR_EXECUTE_STATE` is `blocked`.
+
+Track `supervisor_execute_iteration_count` separately from phase execution and verifier loops. It starts at `1` after the first blocked execute-stage supervisor result.
+
+**If `supervisor_execute_iteration_count < 3`:**
+
+Display: `Codex supervisor found execute-stage gaps. Applying targeted fixes and rerunning verification... (iteration {N}/3)`
+
+Revision prompt:
+
+```markdown
+<revision_context>
+**Phase:** {phase_number}
+**Mode:** supervisor_execute_revision
+
+<files_to_read>
+- {PHASE_DIR}/*-PLAN.md (Executed plans)
+- {PHASE_DIR}/*-SUMMARY.md (Current summaries)
+- {PHASE_DIR}/*-VERIFICATION.md (Verification state)
+- {PHASE_DIR}/*-UAT.md (UAT state when present)
+- {roadmap_path} (Roadmap)
+- {requirements_path} (Requirements)
+- {context_path} (USER DECISIONS from /gsd:discuss-phase)
+- {research_path} (Technical research)
+- {validation_path} (Validation expectations)
+- {PHASE_DIR}/PHASE-SUPERVISOR-EXECUTE-FINDINGS.json (Structured supervisor findings)
+- {PHASE_DIR}/PHASE-SUPERVISOR-EXECUTE-REPORT.md (Human-readable supervisor report)
+</files_to_read>
+
+**Supervisor findings JSON:** {SUPERVISOR_EXECUTE}
+
+**Supervisor report:** {SUPERVISOR_EXECUTE_REPORT}
+</revision_context>
+
+<instructions>
+Make targeted implementation or artifact fixes to close the supervisor blockers.
+Prefer updating code, summaries, verification evidence, or UAT notes over replanning the phase.
+Do NOT ignore cross-plan wiring gaps, unsupported completion claims, or missing requirement evidence.
+Return what changed and why the supervisor blockers should now be resolved.
+</instructions>
+```
+
+```text
+Task(
+  prompt=revision_prompt,
+  subagent_type="gsd-executor",
+  model="{executor_model}",
+  description="Fix execute-stage supervisor findings for Phase {phase}"
+)
+```
+
+After executor returns:
+- rerun phase verification (step `verify_phase_goal`)
+- if verifier returns `gaps_found`, follow the existing gap-closure route
+- if verifier is effectively passed, rerun the execute supervisor gate (step `codex_supervisor_execute_gate`)
+- increment `supervisor_execute_iteration_count`
+
+**If `supervisor_execute_iteration_count >= 3`:**
+
+Display: `Max execute-stage supervisor revision iterations reached. Blockers remain:` + findings summary
+
+Offer: 1) Force proceed, 2) Provide guidance and retry, 3) Abandon
 </step>
 
 <step name="update_roadmap">

@@ -268,7 +268,9 @@ function writePhaseArtifacts(tmpDir, phaseDirName = '03-api') {
     'requirements-completed: [PH-03-01]',
     '---',
     '',
-    '## Self-Check: PASSED',
+    '## Self-Check',
+    '',
+    'All tests pass',
     '',
     '1. **Task 1** - `aaa1111` (feat)',
     '',
@@ -487,6 +489,7 @@ describe('supervisor bundle commands', () => {
     assert.strictEqual(bundle.kind, 'phase');
     assert.strictEqual(bundle.stage, 'execute');
     assert.strictEqual(bundle.execution.summaries.length, 2);
+    assert.strictEqual(bundle.execution.summaries[0].self_check, 'passed');
     assert.strictEqual(bundle.execution.verifier.status, 'passed');
     assert.strictEqual(bundle.execution.uat.status, 'passed');
     assert.strictEqual(bundle.execution.uat.current_test, 'API smoke test');
@@ -494,6 +497,23 @@ describe('supervisor bundle commands', () => {
     assert.strictEqual(bundle.execution.completion_ready.verification_passed, true);
     assert.strictEqual(bundle.execution.completion_ready.ready_for_phase_complete, true);
     assert.strictEqual(bundle.artifacts.findings_path.endsWith('PHASE-SUPERVISOR-EXECUTE-FINDINGS.json'), true);
+  });
+
+  test('treats human_needed-approved manifest status as execute-pass readiness', () => {
+    writePhaseArtifacts(tmpDir);
+    const manifestPath = path.join(tmpDir, '.planning', 'phases', '03-api', 'PHASE_RUN_MANIFEST.json');
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
+    manifest.verification_status = 'human_needed-approved';
+    fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2), 'utf-8');
+
+    const result = runGsdTools('supervisor-bundle .planning/phases/03-api --kind phase --stage execute', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+
+    const output = JSON.parse(result.output);
+    const bundle = JSON.parse(fs.readFileSync(path.join(tmpDir, output.bundle_path), 'utf-8'));
+    assert.strictEqual(bundle.phase.verification_status, 'human_needed-approved');
+    assert.strictEqual(bundle.execution.completion_ready.verification_passed, true);
+    assert.strictEqual(bundle.execution.completion_ready.ready_for_phase_complete, true);
   });
 });
 
@@ -503,6 +523,7 @@ describe('supervisor launch and wait commands', () => {
   let fakeTmuxLog;
   let oldPath;
   let oldTmux;
+  let oldFakeTmuxPaneFile;
 
   beforeEach(() => {
     tmpDir = createTempProject();
@@ -528,6 +549,12 @@ case "$cmd" in
   kill-window)
     exit 0
     ;;
+  capture-pane)
+    if [ -n "$FAKE_TMUX_PANE_FILE" ] && [ -f "$FAKE_TMUX_PANE_FILE" ]; then
+      cat "$FAKE_TMUX_PANE_FILE"
+    fi
+    exit 0
+    ;;
   send-keys)
     exit 0
     ;;
@@ -542,8 +569,11 @@ esac
 
     oldPath = process.env.PATH;
     oldTmux = process.env.TMUX;
+    oldFakeTmuxPaneFile = process.env.FAKE_TMUX_PANE_FILE;
     process.env.PATH = `${fakeBinDir}:${oldPath}`;
     process.env.TMUX = 'test-session,1,0';
+    process.env.FAKE_TMUX_PANE_FILE = path.join(fakeBinDir, 'pane.txt');
+    fs.writeFileSync(process.env.FAKE_TMUX_PANE_FILE, '', 'utf-8');
 
     fs.writeFileSync(path.join(tmpDir, '.planning', 'config.json'), JSON.stringify({
       workflow: {
@@ -563,6 +593,8 @@ esac
     process.env.PATH = oldPath;
     if (oldTmux === undefined) delete process.env.TMUX;
     else process.env.TMUX = oldTmux;
+    if (oldFakeTmuxPaneFile === undefined) delete process.env.FAKE_TMUX_PANE_FILE;
+    else process.env.FAKE_TMUX_PANE_FILE = oldFakeTmuxPaneFile;
     cleanup(tmpDir);
     fs.rmSync(fakeBinDir, { recursive: true, force: true });
   });
@@ -582,6 +614,26 @@ esac
     const log = fs.readFileSync(fakeTmuxLog, 'utf-8');
     assert.ok(log.includes('new-window'), 'creates a new tmux window');
     assert.ok(log.includes('send-keys'), 'bootstraps the supervisor command');
+  });
+
+  test('launch retries submit when bootstrap text is still waiting in the pane', () => {
+    const quickDir = path.join(tmpDir, '.planning', 'quick', '240101-abc-add-handler');
+    const bootstrap = [
+      '$gsd-supervisor',
+      `--bundle '${path.join(quickDir, 'SUPERVISOR-PRE.json')}'`,
+      '--stage pre',
+      `--status '${path.join(quickDir, 'SUPERVISOR-PRE-STATUS.json')}'`,
+      `--findings '${path.join(quickDir, 'SUPERVISOR-PRE-FINDINGS.json')}'`,
+      `--report '${path.join(quickDir, 'SUPERVISOR-PRE-REPORT.md')}'`,
+    ].join(' ');
+    fs.writeFileSync(process.env.FAKE_TMUX_PANE_FILE, `${bootstrap}\n`, 'utf-8');
+
+    const result = runGsdTools('supervisor-launch .planning/quick/240101-abc-add-handler --stage pre', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+
+    const log = fs.readFileSync(fakeTmuxLog, 'utf-8');
+    const sendKeysCount = log.split('\n').filter(line => line.startsWith('send-keys')).length;
+    assert.ok(sendKeysCount >= 3, `expected an extra submit retry, got log:\n${log}`);
   });
 
   test('wait returns passed status and copies latest findings/report', () => {
@@ -623,6 +675,20 @@ esac
 
   test('wait preserves blocked terminal state', () => {
     const quickDir = path.join(tmpDir, '.planning', 'quick', '240101-abc-add-handler');
+    fs.writeFileSync(path.join(quickDir, 'SUPERVISOR-PRE-FINDINGS.json'), JSON.stringify({
+      stage: 'pre',
+      status: 'blocked',
+      findings: [
+        {
+          severity: 'blocker',
+          category: 'coverage',
+          title: 'Requirement missing',
+          evidence: 'Plan does not cover a required flow.',
+          recommended_action: 'Revise the plan before execution.',
+        },
+      ],
+    }, null, 2), 'utf-8');
+    fs.writeFileSync(path.join(quickDir, 'SUPERVISOR-PRE-REPORT.md'), '# Report\n', 'utf-8');
     fs.writeFileSync(path.join(quickDir, 'SUPERVISOR-PRE-STATUS.json'), JSON.stringify({
       run_id: '240101-abc',
       stage: 'pre',
@@ -681,6 +747,33 @@ esac
 
     const output = JSON.parse(result.output);
     assert.strictEqual(output.state, 'timeout');
+  });
+
+  test('wait requires findings and report before returning a terminal success state', () => {
+    const quickDir = path.join(tmpDir, '.planning', 'quick', '240101-abc-add-handler');
+    fs.writeFileSync(path.join(quickDir, 'SUPERVISOR-PRE-STATUS.json'), JSON.stringify({
+      run_id: '240101-abc',
+      stage: 'pre',
+      runtime: 'claude',
+      transport: 'tmux',
+      state: 'passed',
+      bundle_path: '.planning/quick/240101-abc-add-handler/SUPERVISOR-PRE.json',
+      findings_path: '.planning/quick/240101-abc-add-handler/SUPERVISOR-PRE-FINDINGS.json',
+      report_path: '.planning/quick/240101-abc-add-handler/SUPERVISOR-PRE-REPORT.md',
+      tmux_target: 'test-session:9',
+      window_name: 'gsd-supervisor-quick-240101-abc-pre',
+      launch_command: 'fake-codex',
+      started_at: new Date().toISOString(),
+      completed_at: new Date().toISOString(),
+      error: null,
+    }, null, 2), 'utf-8');
+
+    const result = runGsdTools('supervisor-wait .planning/quick/240101-abc-add-handler --stage pre', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.state, 'timeout');
+    assert.match(output.error, /findings\/report artifacts/i);
   });
 
   test('launch supports phase bundles through tmux handoff', () => {
@@ -748,7 +841,7 @@ esac
 });
 
 describe('quick workflow supervisor prompt contract', () => {
-  test('quick workflow includes run manifest and supervisor checkpoints', () => {
+  test('quick workflow includes run manifest, supervisor checkpoints, and revise loops', () => {
     const workflowPath = path.join(__dirname, '..', 'get-shit-done', 'workflows', 'quick.md');
     const content = fs.readFileSync(workflowPath, 'utf-8');
 
@@ -758,6 +851,14 @@ describe('quick workflow supervisor prompt contract', () => {
     assert.ok(content.includes('supervisor-wait'), 'waits for the tmux handoff');
     assert.ok(content.includes('Skill(skill="gsd:supervisor"'), 'keeps direct Codex invocation');
     assert.ok(content.includes('codex_supervisor_enabled'), 'uses the config gate');
+    assert.ok(content.includes('SUPERVISOR_PRE_REPORT=$(cat "${QUICK_DIR}/SUPERVISOR-PRE-REPORT.md"'), 'reads the preflight supervisor report');
+    assert.ok(content.includes('supervisor_pre_iteration_count'), 'tracks preflight supervisor retries');
+    assert.ok(content.includes('Revise ${WORKFLOW_MODE} task ${quick_id} from supervisor findings'), 'routes blocked preflight findings back to the planner');
+    assert.ok(content.includes('rerun the supervisor preflight gate (step 5.75)'), 'reruns the preflight supervisor after targeted planning fixes');
+    assert.ok(content.includes('SUPERVISOR_POST_REPORT=$(cat "${QUICK_DIR}/SUPERVISOR-POST-REPORT.md"'), 'reads the postflight supervisor report');
+    assert.ok(content.includes('supervisor_post_iteration_count'), 'tracks postflight supervisor retries');
+    assert.ok(content.includes('Fix ${WORKFLOW_MODE} task ${quick_id} from postflight supervisor findings'), 'routes blocked postflight findings back to the executor');
+    assert.ok(content.includes('rerun the supervisor postflight gate (step 6.75)'), 'reruns the postflight supervisor after targeted implementation fixes');
   });
 });
 
@@ -772,6 +873,22 @@ describe('phase workflow supervisor prompt contract', () => {
     assert.ok(content.includes('supervisor-wait "$PHASE_DIR" --kind phase --stage plan'), 'waits for phase plan supervisor');
     assert.ok(content.includes('Skill(skill="gsd:supervisor", args="--bundle ${PHASE_PLAN_BUNDLE} --stage plan --kind phase")'), 'keeps direct Codex phase invocation');
     assert.ok(content.includes('codex_supervisor_phase_enabled'), 'uses the phase config gate');
+    assert.ok(content.includes('SUPERVISOR_PLAN_REPORT=$(cat "${PHASE_DIR}/PHASE-SUPERVISOR-PLAN-REPORT.md"'), 'reads the supervisor report');
+    assert.ok(content.includes('Supervisor Revision Loop'), 'documents the supervisor revision loop');
+    assert.ok(content.includes('supervisor_iteration_count'), 'tracks supervisor-specific retries');
+    assert.ok(content.includes('Revise Phase {phase} plans from supervisor findings'), 'sends blocked findings back to the planner');
+  });
+
+  test('supervisor prompt documents phase compatibility outputs and stage names', () => {
+    const commandPath = path.join(__dirname, '..', 'commands', 'gsd', 'supervisor.md');
+    const agentPath = path.join(__dirname, '..', 'agents', 'gsd-supervisor.md');
+    const commandContent = fs.readFileSync(commandPath, 'utf-8');
+    const agentContent = fs.readFileSync(agentPath, 'utf-8');
+
+    assert.ok(commandContent.includes('PHASE-SUPERVISOR-FINDINGS.json'), 'documents phase compatibility findings output');
+    assert.ok(commandContent.includes('PHASE-SUPERVISOR-REPORT.md'), 'documents phase compatibility report output');
+    assert.ok(commandContent.includes('For phase bundles, `Stage` is `plan` or `execute`.'), 'documents phase stage names');
+    assert.ok(agentContent.includes('use the stage exactly as provided by the bundle: `pre|post|plan|execute`'), 'agent prompt accepts phase stages');
   });
 
   test('execute-phase gates supervisor before phase completion and skips gaps_found', () => {
@@ -782,6 +899,11 @@ describe('phase workflow supervisor prompt contract', () => {
     assert.ok(content.includes('supervisor-launch "$PHASE_DIR" --kind phase --stage execute'), 'launches phase execute supervisor');
     assert.ok(content.includes('supervisor-wait "$PHASE_DIR" --kind phase --stage execute'), 'waits for phase execute supervisor');
     assert.ok(content.includes('If verifier returned `gaps_found`, skip this step'), 'preserves the gap closure route');
+    assert.ok(content.includes('SUPERVISOR_EXECUTE_REPORT=$(cat "${PHASE_DIR}/PHASE-SUPERVISOR-EXECUTE-REPORT.md"'), 'reads the execute supervisor report');
+    assert.ok(content.includes('supervisor_execute_iteration_count'), 'tracks execute supervisor retries');
+    assert.ok(content.includes('Fix execute-stage supervisor findings for Phase {phase}'), 'routes blocked execute findings back to the executor');
+    assert.ok(content.includes('rerun phase verification (step `verify_phase_goal`)'), 'reruns verifier after targeted fixes');
+    assert.ok(content.includes('rerun the execute supervisor gate (step `codex_supervisor_execute_gate`)'), 'reruns execute supervisor after fixes');
     const gateIndex = content.indexOf('<step name="codex_supervisor_execute_gate">');
     const phaseCompleteIndex = content.indexOf('COMPLETION=$(node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" phase complete');
     assert.ok(gateIndex !== -1 && phaseCompleteIndex !== -1 && gateIndex < phaseCompleteIndex, 'runs the execute gate before phase completion');

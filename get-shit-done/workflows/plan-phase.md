@@ -619,7 +619,7 @@ Task(
 
 ## 11. Handle Checker Return
 
-- **`## VERIFICATION PASSED`:** Display confirmation, proceed to step 13.
+- **`## VERIFICATION PASSED`:** Display confirmation, proceed to step 12.5 when phase supervisor is enabled, otherwise step 13.
 - **`## ISSUES FOUND`:** Display issues, check iteration count, proceed to step 12.
 
 ## 12. Revision Loop (Max 3 Iterations)
@@ -783,19 +783,83 @@ node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" supervisor-wait "$PHASE_DIR
 
 After the supervisor completes:
 - verify `${PHASE_DIR}/PHASE-SUPERVISOR-PLAN-FINDINGS.json` exists
-- read findings and state:
+- read findings, report, and state:
 ```bash
 SUPERVISOR_PLAN=$(node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" supervisor-findings "${PHASE_DIR}/PHASE-SUPERVISOR-PLAN-FINDINGS.json")
 if [[ "$SUPERVISOR_PLAN" == @file:* ]]; then SUPERVISOR_PLAN=$(cat "${SUPERVISOR_PLAN#@file:}"); fi
+SUPERVISOR_PLAN_REPORT=$(cat "${PHASE_DIR}/PHASE-SUPERVISOR-PLAN-REPORT.md" 2>/dev/null || true)
 SUPERVISOR_PLAN_STATE=$(node -e 'const fs = require("fs"); const data = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); process.stdout.write(data.state || "failed");' "${PHASE_DIR}/PHASE-SUPERVISOR-PLAN-STATUS.json")
 ```
 - update `PHASE_RUN_MANIFEST.json` `supervisor_plan_status`
 - when tmux transport ran, also update `supervisor_plan_tmux_target`
 
 Gate behavior:
-- `blocked`, `failed`, or `timeout` → stop before offering `/gsd:execute-phase`
+- `blocked` → enter the supervisor revision loop (step 12.75)
+- `failed` or `timeout` → stop before offering `/gsd:execute-phase`
 - `warnings` → continue and keep the warnings recorded in the manifest
 - `passed` → continue normally
+
+## 12.75. Supervisor Revision Loop (Max 3 Iterations)
+
+Run this step only when `SUPERVISOR_PLAN_STATE` is `blocked`.
+
+Track `supervisor_iteration_count` separately from the checker loop. It starts at `1` after the first blocked supervisor result.
+
+**If `supervisor_iteration_count < 3`:**
+
+Display: `Codex supervisor found plan gaps. Sending back to planner for targeted revision... (iteration {N}/3)`
+
+Revision prompt:
+
+```markdown
+<revision_context>
+**Phase:** {phase_number}
+**Mode:** supervisor_revision
+
+<files_to_read>
+- {PHASE_DIR}/*-PLAN.md (Current plans)
+- {roadmap_path} (Roadmap)
+- {requirements_path} (Requirements)
+- {context_path} (USER DECISIONS from /gsd:discuss-phase)
+- {import_path} (Imported phase baseline)
+- {research_path} (Technical research)
+- {validation_path} (Validation expectations)
+- {PHASE_DIR}/PHASE-SUPERVISOR-PLAN-FINDINGS.json (Structured supervisor findings)
+- {PHASE_DIR}/PHASE-SUPERVISOR-PLAN-REPORT.md (Human-readable supervisor report)
+</files_to_read>
+
+**Supervisor findings JSON:** {SUPERVISOR_PLAN}
+
+**Supervisor report:** {SUPERVISOR_PLAN_REPORT}
+</revision_context>
+
+<instructions>
+Make targeted updates to close the supervisor gaps.
+Preserve the accepted phase shape unless the findings prove the current structure is incompatible.
+Do NOT ignore requirement coverage, dependency compatibility, validation expectations, or missing cross-plan wiring.
+Return what changed and why the supervisor blockers should now be resolved.
+</instructions>
+```
+
+```text
+Task(
+  prompt=revision_prompt,
+  subagent_type="gsd-planner",
+  model="{planner_model}",
+  description="Revise Phase {phase} plans from supervisor findings"
+)
+```
+
+After planner returns:
+- rerun the checker (step 10)
+- if checker passes, rerun the supervisor gate (step 12.5)
+- increment `supervisor_iteration_count`
+
+**If `supervisor_iteration_count >= 3`:**
+
+Display: `Max supervisor revision iterations reached. Blockers remain:` + findings summary
+
+Offer: 1) Force proceed, 2) Provide guidance and retry, 3) Abandon
 
 ## 14. Present Final Status
 

@@ -112,6 +112,7 @@ Create detailed execution plan for a specific phase.
 - Includes verification criteria and success measures
 - Multiple plans per phase supported (XX-01, XX-02, etc.)
 - Can run a Codex supervisor plan gate after plan-checking when `workflow.codex_supervisor_phase` is enabled
+- Blocked supervisor findings can trigger a targeted planner revise-and-rerun loop before `/gsd:execute-phase`
 
 Usage: `/gsd:plan-phase 1`
 Result: Creates `.planning/phases/01-foundation/01-01-PLAN.md`
@@ -128,6 +129,7 @@ Execute all plans in a phase, or run a specific wave.
 - Optional `--wave N` flag executes only Wave `N` and stops unless the phase is now fully complete
 - Verifies phase goal after all plans complete
 - Can run a Codex supervisor execute gate before `phase complete` when `workflow.codex_supervisor_phase` is enabled
+- Blocked execute-stage supervisor findings can trigger a targeted executor revise-and-rerun loop before `phase complete`
 - Updates REQUIREMENTS.md, ROADMAP.md, STATE.md
 
 Usage: `/gsd:execute-phase 5`
@@ -156,6 +158,7 @@ Execute a narrow feature, fix, or refactor through GSD's recommended slim workfl
 - Runs `spec -> implement -> self-review -> verify`
 - Escalates to plan-checking only when the task is risky or too broad
 - Can run Codex supervisor pre/post checks automatically from Claude via tmux when `workflow.codex_supervisor` is enabled
+- Blocked supervisor findings can trigger targeted planner/executor revise-and-rerun loops before completion
 - Stores artifacts in `.planning/quick/` and updates STATE.md tracking
 
 Use when you want the default small-feature delivery path.
@@ -183,6 +186,7 @@ Quick mode uses the same system with a shorter path:
 - Spawns planner + executor (skips researcher, checker, verifier by default)
 - Quick tasks live in `.planning/quick/` separate from planned phases
 - Can run Codex supervisor pre/post checks automatically from Claude via tmux when `workflow.codex_supervisor` is enabled
+- Blocked supervisor findings can trigger targeted planner/executor revise-and-rerun loops before completion
 - Updates STATE.md tracking (not ROADMAP.md)
 
 Use when you already know exactly what to do and want the lowest-ceremony path.

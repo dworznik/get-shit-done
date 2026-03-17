@@ -181,6 +181,79 @@ function ensureCommandExists(command) {
   }
 }
 
+function captureTmuxPane(tmuxTarget, cwd) {
+  try {
+    return execFileSync('tmux', ['capture-pane', '-p', '-t', tmuxTarget], {
+      cwd,
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+  } catch {
+    return null;
+  }
+}
+
+function waitForTmuxPaneToSettle(tmuxTarget, cwd, maxWaitMs) {
+  const timeoutMs = Math.max(0, Number(maxWaitMs) || 0);
+  if (timeoutMs <= 0) return;
+
+  const pollMs = 250;
+  const start = Date.now();
+  let previous = null;
+  let stableCount = 0;
+
+  while (Date.now() - start < timeoutMs) {
+    const current = captureTmuxPane(tmuxTarget, cwd);
+    if (!current) {
+      sleepMs(pollMs);
+      continue;
+    }
+
+    if (current === previous) {
+      stableCount += 1;
+      if (stableCount >= 2) return;
+    } else {
+      stableCount = 0;
+      previous = current;
+    }
+
+    sleepMs(pollMs);
+  }
+}
+
+function maybeResubmitBootstrap(tmuxTarget, cwd, bootstrap) {
+  const pane = captureTmuxPane(tmuxTarget, cwd);
+  if (!pane) return false;
+
+  const lines = pane.split('\n').map(line => line.trimEnd());
+  const lastNonEmpty = [...lines].reverse().find(line => line.trim().length > 0) || '';
+  const stillWaitingForSubmit =
+    lastNonEmpty.includes(bootstrap) ||
+    lastNonEmpty.trim().startsWith('$gsd-supervisor ') ||
+    lastNonEmpty.includes('gsd-supervisor --bundle');
+
+  if (stillWaitingForSubmit) {
+    try {
+      execFileSync('tmux', ['send-keys', '-t', tmuxTarget, 'C-m'], {
+        cwd,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  return false;
+}
+
+function sendTmuxSubmit(tmuxTarget, cwd) {
+  execFileSync('tmux', ['send-keys', '-t', tmuxTarget, 'C-m'], {
+    cwd,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+}
+
 function supervisorBaseStatus({ manifest, stage, runtime, transport, paths, launchCommand, tmuxTarget, windowName, errorMessage }) {
   return {
     run_id: manifest.run_id || path.basename(paths.abs.bundle, '.json'),
@@ -442,8 +515,20 @@ function extractCommitHashes(summaryContent) {
 
 function extractSelfCheck(summaryContent) {
   if (!summaryContent) return null;
-  const match = summaryContent.match(/^## Self-Check:\s*(PASSED|FAILED)\s*$/mi);
-  return match ? match[1].toLowerCase() : null;
+  const explicitMatch = summaryContent.match(/^##\s*Self-Check:\s*(PASSED|FAILED)\s*$/mi);
+  if (explicitMatch) return explicitMatch[1].toLowerCase();
+
+  const sectionPattern = /##\s*(?:Self[- ]?Check|Verification|Quality Check)(?::\s*(PASSED|FAILED))?/i;
+  const sectionMatch = summaryContent.match(sectionPattern);
+  if (!sectionMatch) return null;
+  if (sectionMatch[1]) return sectionMatch[1].toLowerCase();
+
+  const checkSection = summaryContent.slice(sectionMatch.index);
+  const passPattern = /(?:all\s+)?(?:pass|passed|✓|✅|complete|succeeded)/i;
+  const failPattern = /(?:fail|failed|✗|❌|incomplete|blocked)/i;
+  if (failPattern.test(checkSection)) return 'failed';
+  if (passPattern.test(checkSection)) return 'passed';
+  return null;
 }
 
 function extractVerificationStatus(verificationContent) {
@@ -693,6 +778,10 @@ function cmdSupervisorBundle(cwd, dirArg, stage, raw, kind = 'quick') {
     if (stage === 'execute') {
       const verification = summarizeVerification(cwd, verificationPath);
       const uat = summarizeUat(cwd, uatPath);
+      const effectiveVerificationStatus = manifest.verification_status || verification?.status || null;
+      const verificationPassed =
+        effectiveVerificationStatus === 'passed' ||
+        effectiveVerificationStatus === 'human_needed-approved';
       const summaries = (phaseInfo?.summaries || planIndex.summary_paths.map(summaryPath => path.basename(summaryPath))).map(name => {
         const summary = summarizeSummary(cwd, path.join(fullPath, name)) || {};
         return {
@@ -707,9 +796,9 @@ function cmdSupervisorBundle(cwd, dirArg, stage, raw, kind = 'quick') {
         uat,
         completion_ready: {
           all_plans_completed: planIndex.incomplete.length === 0 && planIndex.plan_count > 0,
-          verification_passed: verification?.status === 'passed',
+          verification_passed: verificationPassed,
           has_uat: !!uat,
-          ready_for_phase_complete: planIndex.incomplete.length === 0 && verification?.status === 'passed',
+          ready_for_phase_complete: planIndex.incomplete.length === 0 && verificationPassed,
         },
       };
     }
@@ -925,6 +1014,7 @@ function cmdSupervisorLaunch(cwd, dirArg, stage, raw, kind = 'quick') {
   writeJsonFile(paths.abs.status, status);
 
   sleepMs(Math.max(0, Number(config.codex_boot_delay_ms) || 0));
+  waitForTmuxPaneToSettle(tmuxTarget, cwd, 1500);
 
   const bootstrap = [
     '$gsd-supervisor',
@@ -940,10 +1030,13 @@ function cmdSupervisorLaunch(cwd, dirArg, stage, raw, kind = 'quick') {
       cwd,
       stdio: ['ignore', 'pipe', 'pipe'],
     });
-    execFileSync('tmux', ['send-keys', '-t', tmuxTarget, 'Enter'], {
-      cwd,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
+    sendTmuxSubmit(tmuxTarget, cwd);
+    sleepMs(250);
+    // A second submit is harmless if Codex already accepted the command,
+    // and often fixes cases where startup focus races the first newline.
+    sendTmuxSubmit(tmuxTarget, cwd);
+    sleepMs(250);
+    maybeResubmitBootstrap(tmuxTarget, cwd, bootstrap);
   } catch (err) {
     return fail(`Failed to send bootstrap command to tmux window: ${String(err.stderr || err.message || '').trim()}`);
   }
@@ -998,6 +1091,26 @@ function cmdSupervisorWait(cwd, dirArg, stage, raw, kind = 'quick') {
 
     sleepMs(pollMs);
     status = readSupervisorStatus(paths.abs.status) || status;
+  }
+
+  if ((status.state === 'passed' || status.state === 'warnings' || status.state === 'blocked')
+      && (!fs.existsSync(paths.abs.findings) || !fs.existsSync(paths.abs.report))) {
+    const artifactWaitStart = Date.now();
+    while (Date.now() - artifactWaitStart < timeoutMs) {
+      if (fs.existsSync(paths.abs.findings) && fs.existsSync(paths.abs.report)) {
+        break;
+      }
+      sleepMs(pollMs);
+      status = readSupervisorStatus(paths.abs.status) || status;
+      if (status.state === 'failed' || status.state === 'timeout') break;
+    }
+
+    if (!fs.existsSync(paths.abs.findings) || !fs.existsSync(paths.abs.report)) {
+      status.state = 'timeout';
+      status.completed_at = new Date().toISOString();
+      status.error = status.error || 'Supervisor reached a terminal state before writing findings/report artifacts.';
+      writeJsonFile(paths.abs.status, status);
+    }
   }
 
   if (status.state === 'passed' || status.state === 'warnings' || status.state === 'blocked') {

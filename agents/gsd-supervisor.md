@@ -92,7 +92,7 @@ Schema:
 ```
 
 Rules:
-- use `pre` or `post` from the bundle
+- use the stage exactly as provided by the bundle: `pre|post|plan|execute`
 - use only `passed`, `warnings`, or `blocked`
 - if there are no findings, return `"findings": []`
 - keep evidence concrete and bundle-grounded

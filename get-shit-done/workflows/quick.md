@@ -372,20 +372,79 @@ node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" supervisor-wait "$QUICK_DIR
 
 After it completes:
 - verify `${QUICK_DIR}/SUPERVISOR-PRE-FINDINGS.json` exists
-- read normalized findings:
+- read normalized findings, report, and state:
 ```bash
 SUPERVISOR_PRE=$(node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" supervisor-findings "${QUICK_DIR}/SUPERVISOR-PRE-FINDINGS.json")
 if [[ "$SUPERVISOR_PRE" == @file:* ]]; then SUPERVISOR_PRE=$(cat "${SUPERVISOR_PRE#@file:}"); fi
+SUPERVISOR_PRE_REPORT=$(cat "${QUICK_DIR}/SUPERVISOR-PRE-REPORT.md" 2>/dev/null || true)
 SUPERVISOR_PRE_STATUS=$(node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" supervisor-findings "${QUICK_DIR}/SUPERVISOR-PRE-FINDINGS.json" --raw)
 ```
 - update `RUN_MANIFEST.json` `supervisor_pre_status`
 - when tmux transport ran, also update `supervisor_pre_tmux_target`
 
 Gate behavior:
-- `blocked` → stop before execution, present the supervisor findings, keep `final_status` as `blocked`
+- `blocked` → enter the preflight supervisor revision loop (step 5.76)
 - `failed` or `timeout` → stop before execution, keep `final_status` as `blocked`
 - `warnings` → continue and record warnings in the manifest
 - `passed` → continue normally
+
+**Step 5.76: Preflight supervisor revision loop**
+
+Run this step only when the supervisor preflight status is `blocked`.
+
+Track `supervisor_pre_iteration_count` separately from the plan-check loop. It starts at `1` after the first blocked preflight supervisor result.
+
+**If `supervisor_pre_iteration_count < 3`:**
+
+Display: `Codex supervisor found planning gaps. Revising the quick/focus plan and rerunning checks... (iteration {N}/3)`
+
+Revision prompt:
+
+```markdown
+<revision_context>
+**Mode:** ${WORKFLOW_MODE}
+**Task Description:** ${DESCRIPTION}
+**Classifier:** ${WORKFLOW_MODE === 'focus' ? TASK_CLASS : 'quick'}
+
+<files_to_read>
+- ${QUICK_DIR}/${quick_id}-PLAN.md
+${DISCUSS_MODE ? '- ' + QUICK_DIR + '/' + quick_id + '-CONTEXT.md' : ''}
+- ${QUICK_DIR}/SUPERVISOR-PRE-FINDINGS.json
+- ${QUICK_DIR}/SUPERVISOR-PRE-REPORT.md
+</files_to_read>
+
+**Supervisor findings JSON:** ${SUPERVISOR_PRE}
+
+**Supervisor report:** ${SUPERVISOR_PRE_REPORT}
+</revision_context>
+
+<instructions>
+Make targeted plan updates to close the supervisor blockers.
+Preserve the bounded quick/focus scope unless the findings prove the task should be reclassified or split.
+Do NOT ignore constraints, review guidance, must_haves, wiring expectations, or missing assumptions.
+Return what changed and why the preflight blockers should now be resolved.
+</instructions>
+```
+
+```text
+Task(
+  prompt=revision_prompt,
+  subagent_type="gsd-planner",
+  model="{planner_model}",
+  description="Revise ${WORKFLOW_MODE} task ${quick_id} from supervisor findings"
+)
+```
+
+After planner returns:
+- rerun the plan-check loop when Step 5.5 was active
+- rerun the supervisor preflight gate (step 5.75)
+- increment `supervisor_pre_iteration_count`
+
+**If `supervisor_pre_iteration_count >= 3`:**
+
+Display: `Max preflight supervisor revision iterations reached. Blockers remain:` + findings summary
+
+Offer: 1) Force proceed, 2) Provide guidance and retry, 3) Abandon
 
 ---
 
@@ -502,20 +561,81 @@ node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" supervisor-wait "$QUICK_DIR
 
 After it completes:
 - verify `${QUICK_DIR}/SUPERVISOR-POST-FINDINGS.json` exists
-- read normalized findings:
+- read normalized findings, report, and state:
 ```bash
 SUPERVISOR_POST=$(node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" supervisor-findings "${QUICK_DIR}/SUPERVISOR-POST-FINDINGS.json")
 if [[ "$SUPERVISOR_POST" == @file:* ]]; then SUPERVISOR_POST=$(cat "${SUPERVISOR_POST#@file:}"); fi
+SUPERVISOR_POST_REPORT=$(cat "${QUICK_DIR}/SUPERVISOR-POST-REPORT.md" 2>/dev/null || true)
 SUPERVISOR_POST_STATUS=$(node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" supervisor-findings "${QUICK_DIR}/SUPERVISOR-POST-FINDINGS.json" --raw)
 ```
 - update `RUN_MANIFEST.json` `supervisor_post_status`
 - when tmux transport ran, also update `supervisor_post_tmux_target`
 
 Gate behavior:
-- `blocked` → stop before final success reporting, keep `final_status` as `blocked`
+- `blocked` → enter the postflight supervisor revision loop (step 6.76)
 - `failed` or `timeout` → stop before final success reporting, keep `final_status` as `blocked`
 - `warnings` → continue and record warnings in the manifest
 - `passed` → continue normally
+
+**Step 6.76: Postflight supervisor revision loop**
+
+Run this step only when the supervisor postflight status is `blocked`.
+
+Track `supervisor_post_iteration_count` separately from verification. It starts at `1` after the first blocked postflight supervisor result.
+
+**If `supervisor_post_iteration_count < 3`:**
+
+Display: `Codex supervisor found execution gaps. Applying targeted fixes and rerunning verification... (iteration {N}/3)`
+
+Revision prompt:
+
+```markdown
+<revision_context>
+**Mode:** ${WORKFLOW_MODE}
+**Task Description:** ${DESCRIPTION}
+**Classifier:** ${WORKFLOW_MODE === 'focus' ? TASK_CLASS : 'quick'}
+
+<files_to_read>
+- ${QUICK_DIR}/${quick_id}-PLAN.md
+- ${QUICK_DIR}/${quick_id}-SUMMARY.md
+${VERIFY_ENABLED ? '- ' + QUICK_DIR + '/' + quick_id + '-VERIFICATION.md' : ''}
+${DISCUSS_MODE ? '- ' + QUICK_DIR + '/' + quick_id + '-CONTEXT.md' : ''}
+- ${QUICK_DIR}/SUPERVISOR-POST-FINDINGS.json
+- ${QUICK_DIR}/SUPERVISOR-POST-REPORT.md
+</files_to_read>
+
+**Supervisor findings JSON:** ${SUPERVISOR_POST}
+
+**Supervisor report:** ${SUPERVISOR_POST_REPORT}
+</revision_context>
+
+<instructions>
+Make targeted implementation or artifact fixes to close the supervisor blockers.
+Prefer updating code, summary evidence, or verification support over rewriting the task from scratch.
+Do NOT ignore unsupported completion claims, missing must_haves evidence, unresolved deviations, or failed self-review signals.
+Return what changed and why the postflight blockers should now be resolved.
+</instructions>
+```
+
+```text
+Task(
+  prompt=revision_prompt,
+  subagent_type="gsd-executor",
+  model="{executor_model}",
+  description="Fix ${WORKFLOW_MODE} task ${quick_id} from postflight supervisor findings"
+)
+```
+
+After executor returns:
+- rerun verification when Step 6.5 was active
+- rerun the supervisor postflight gate (step 6.75)
+- increment `supervisor_post_iteration_count`
+
+**If `supervisor_post_iteration_count >= 3`:**
+
+Display: `Max postflight supervisor revision iterations reached. Blockers remain:` + findings summary
+
+Offer: 1) Force proceed, 2) Provide guidance and retry, 3) Abandon
 
 ---
 
