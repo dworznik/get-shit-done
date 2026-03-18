@@ -1367,6 +1367,13 @@ function convertClaudeToOpencodeFrontmatter(content, { isAgent = false } = {}) {
       continue;
     }
 
+    // Strip model: field — OpenCode doesn't support Claude Code model aliases
+    // like 'haiku', 'sonnet', 'opus', or 'inherit'. Omitting lets OpenCode use
+    // its configured default model. See #1156.
+    if (trimmed.startsWith('model:')) {
+      continue;
+    }
+
     // Convert color names to hex for opencode (commands only; agents strip color above)
     if (trimmed.startsWith('color:')) {
       const colorValue = trimmed.substring(6).trim().toLowerCase();
@@ -1403,8 +1410,10 @@ function convertClaudeToOpencodeFrontmatter(content, { isAgent = false } = {}) {
   }
 
   // For agents: add required OpenCode agent fields
+  // Note: Do NOT add 'model: inherit' — OpenCode does not recognize the 'inherit'
+  // keyword and throws ProviderModelNotFoundError. Omitting model: lets OpenCode
+  // use its default model for subagents. See #1156.
   if (isAgent) {
-    newLines.push('model: inherit');
     newLines.push('mode: subagent');
   }
 

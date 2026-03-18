@@ -5,6 +5,8 @@
  * Larger runtime test suites (Copilot, Codex, Antigravity) have their own files.
  *
  * OpenCode: convertClaudeToOpencodeFrontmatter (agent + command modes)
+ *   model: inherit is NOT added (OpenCode doesn't support it — see #1156)
+ *   but mode: subagent IS added (required by OpenCode agents).
  * Gemini: convertClaudeToGeminiAgent (frontmatter + tool mapping + body escaping)
  */
 
@@ -56,10 +58,10 @@ describe('OpenCode agent conversion (isAgent: true)', () => {
     assert.ok(frontmatter.includes('name: gsd-executor'), 'name: should be preserved for agents');
   });
 
-  test('adds model: inherit', () => {
+  test('does not add model: inherit (OpenCode does not support it)', () => {
     const result = convertClaudeToOpencodeFrontmatter(SAMPLE_AGENT, { isAgent: true });
     const frontmatter = result.split('---')[1];
-    assert.ok(frontmatter.includes('model: inherit'), 'model: inherit should be added');
+    assert.ok(!frontmatter.includes('model: inherit'), 'model: inherit should NOT be added — OpenCode throws ProviderModelNotFoundError');
   });
 
   test('adds mode: subagent', () => {
