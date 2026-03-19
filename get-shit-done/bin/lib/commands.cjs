@@ -1061,6 +1061,12 @@ function cmdSupervisorLaunch(cwd, dirArg, stage, raw, kind = 'quick') {
     return fail('tmux is not installed or not available on PATH.');
   }
 
+  // Clear stale artifacts from any previous run so supervisor-wait
+  // cannot mistake old findings/report for the current run's output.
+  for (const file of [paths.abs.findings, paths.abs.report]) {
+    try { fs.unlinkSync(file); } catch { /* ignore if absent */ }
+  }
+
   const status = supervisorBaseStatus({
     manifest,
     stage,
