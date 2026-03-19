@@ -173,7 +173,7 @@ function ensureCommandExists(command) {
   try {
     execSync(`command -v ${shellEscape(command)}`, {
       stdio: 'pipe',
-      shell: '/bin/zsh',
+      shell: process.env.SHELL || '/bin/sh',
     });
     return true;
   } catch {
