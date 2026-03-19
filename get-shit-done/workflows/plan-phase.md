@@ -46,6 +46,9 @@ Set `TEXT_MODE=true` if `--text` is present in $ARGUMENTS OR `text_mode` from in
 
 If `--stack` flag present, set `STACK_MODE=true`.
 
+**Config auto-detection:** If `--stack` is NOT in $ARGUMENTS, check `delivery` from init JSON.
+If `delivery` is `"stack"`, set `STACK_MODE=true`.
+
 Extract `--prd <filepath>` from $ARGUMENTS. If present, set PRD_FILE to the filepath.
 
 **If no phase number:** Detect next unplanned phase from roadmap.

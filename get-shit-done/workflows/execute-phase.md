@@ -89,7 +89,9 @@ if [ -f "${PHASE_DIR}/PHASE_DELIVERY.json" ]; then
 fi
 ```
 
-If `--stack` flag present OR `DELIVERY_MODE` is `stack` → set `STACK_MODE=true`. Record `BASE_BRANCH=$(git branch --show-current)`.
+**Config fallback:** If neither `--stack` flag nor `PHASE_DELIVERY.json` set stack mode, check `delivery` from init JSON. If `"stack"`, set `STACK_MODE=true`.
+
+If `--stack` flag present OR `DELIVERY_MODE` is `stack` OR init `delivery` is `"stack"` → set `STACK_MODE=true`. Record `BASE_BRANCH=$(git branch --show-current)`.
 
 **REQUIRED — Sync chain flag with intent.** If user invoked manually (no `--auto`), clear the ephemeral chain flag from any previous interrupted `--auto` chain. This prevents stale `_auto_chain_active: true` from causing unwanted auto-advance. This does NOT touch `workflow.auto_advance` (the user's persistent settings preference). You MUST execute this bash block before any config reads:
 ```bash

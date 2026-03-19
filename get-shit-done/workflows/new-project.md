@@ -12,6 +12,8 @@ Read all files referenced by the invoking prompt's execution_context before star
 
 Check if `--auto` flag is present in $ARGUMENTS.
 
+**Parse --stack flag:** If `--stack` is present in $ARGUMENTS, set `STACK_MODE=true`.
+
 **If auto mode:**
 
 - Skip brownfield mapping offer (assume greenfield)
@@ -43,6 +45,82 @@ The document should describe what you want to build.
 
 </auto_mode>
 
+<empty_mode>
+## Empty Mode Detection
+
+Check if `--empty` flag is present in $ARGUMENTS.
+
+**If empty mode:**
+Create the minimum `.planning/` scaffold and stop. No questions, no research, no agents.
+
+1. Run init (same as Step 1)
+2. If optional context was provided (@ reference or pasted text), extract:
+   - project name (or derive from directory name)
+   - brief description
+   - tech stack mentions
+   - any constraints
+3. Create `.planning/config.json`:
+   ```json
+   {
+     "mode": "yolo",
+     "granularity": "phase",
+     "parallelization": false,
+     "commit_docs": true,
+     "model_profile": "balanced",
+     "workflow": {
+       "research": false,
+       "plan_check": false,
+       "verifier": true,
+       "nyquist_validation": false,
+       "auto_advance": false
+     }
+   }
+   ```
+   **If `STACK_MODE` is true:** Override the following in the config:
+   - Set `"delivery": "stack"`, `"granularity": "coarse"`, `"parallelization": false`
+   - Add `"git": { "branching_strategy": "phase" }`
+4. Create `.planning/PROJECT.md` — if context was provided, fill in What This Is, Core Value,
+   and Constraints from it. Otherwise use directory name and leave sections as placeholders.
+   Do NOT populate requirements or roadmap sections.
+5. Create `.planning/ROADMAP.md` with an empty milestone stub:
+   ```markdown
+   # Roadmap
+
+   ## Milestone: v0.1.0
+
+   (No phases defined yet)
+   ```
+   Do NOT create phases from context — leave that to `/gsd:focus-stack` or `/gsd:plan-phase`.
+6. Create `.planning/STATE.md` with project reference only (no phase reference).
+7. Do NOT create `REQUIREMENTS.md` — it is not needed for focus-stack workflows.
+8. Commit all files:
+   ```bash
+   node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" commit "chore: scaffold project" --files .planning/config.json .planning/PROJECT.md .planning/ROADMAP.md .planning/STATE.md
+   ```
+9. Print summary and stop:
+   **If `STACK_MODE` is true:**
+   ```
+   ✓ Project scaffolded in .planning/ (stack delivery mode)
+     - config.json (YOLO mode, balanced profile, delivery: stack)
+     - PROJECT.md
+     - ROADMAP.md (empty)
+     - STATE.md
+
+   Next: /gsd:plan-phase 1 --stack
+   ```
+   **Otherwise:**
+   ```
+   ✓ Project scaffolded in .planning/
+     - config.json (YOLO mode, balanced profile)
+     - PROJECT.md
+     - ROADMAP.md (empty)
+     - STATE.md
+
+   Next: /gsd:focus-stack, /gsd:plan-phase 1, or edit .planning/ files directly
+   ```
+10. Do NOT chain into discuss/plan/execute. Stop here.
+</empty_mode>
+
 <process>
 
 ## 1. Setup
@@ -63,6 +141,8 @@ Parse JSON for: `researcher_model`, `synthesizer_model`, `roadmapper_model`, `co
 ```bash
 git init
 ```
+
+**If empty mode:** Execute the `<empty_mode>` steps above (starting from step 2) and stop. Do not continue to Step 2 or beyond.
 
 ## 2. Brownfield Offer
 
@@ -96,6 +176,8 @@ YOLO mode is implicit (auto = YOLO). Ask remaining config questions:
 
 **Round 1 — Core settings (3 questions, no Mode question):**
 
+**If `STACK_MODE` is true:** Pre-select Granularity to "Coarse" as default, skip Execution question (auto-set `parallelization: false`).
+
 ```
 AskUserQuestion([
   {
@@ -108,6 +190,7 @@ AskUserQuestion([
       { label: "Fine", description: "Many focused phases (8-12 phases, 5-10 plans each)" }
     ]
   },
+  // Skip this question when STACK_MODE is true — auto-set parallelization: false
   {
     header: "Execution",
     question: "Run plans in parallel?",
@@ -180,6 +263,12 @@ Create `.planning/config.json` with all settings (CLI fills in remaining default
 mkdir -p .planning
 node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" config-new-project '{"mode":"yolo","granularity":"[selected]","parallelization":true|false,"commit_docs":true|false,"model_profile":"quality|balanced|budget|inherit","workflow":{"research":true|false,"plan_check":true|false,"verifier":true|false,"nyquist_validation":true|false,"auto_advance":true}}'
 ```
+
+**If `STACK_MODE` is true:** Additionally set in config.json:
+- `"delivery": "stack"`
+- `"git": { "branching_strategy": "phase" }`
+- Override `"granularity": "coarse"` (if not already selected as Coarse)
+- Override `"parallelization": false`
 
 **If commit_docs = No:** Add `.planning/` to `.gitignore`.
 
@@ -397,6 +486,8 @@ If "No" or `~/.gsd/defaults.json` doesn't exist: proceed with the questions belo
 
 **Round 1 — Core workflow settings (4 questions):**
 
+**If `STACK_MODE` is true:** Default Granularity to "Coarse", skip Execution question (auto-set `parallelization: false`).
+
 ```
 questions: [
   {
@@ -418,6 +509,7 @@ questions: [
       { label: "Fine", description: "Many focused phases (8-12 phases, 5-10 plans each)" }
     ]
   },
+  // Skip this question when STACK_MODE is true — auto-set parallelization: false
   {
     header: "Execution",
     question: "Run plans in parallel?",
@@ -500,6 +592,12 @@ Create `.planning/config.json` with all settings (CLI fills in remaining default
 mkdir -p .planning
 node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" config-new-project '{"mode":"[yolo|interactive]","granularity":"[selected]","parallelization":true|false,"commit_docs":true|false,"model_profile":"quality|balanced|budget|inherit","workflow":{"research":true|false,"plan_check":true|false,"verifier":true|false,"nyquist_validation":[false if granularity=coarse, true otherwise]}}'
 ```
+
+**If `STACK_MODE` is true:** Additionally set in config.json:
+- `"delivery": "stack"`
+- `"git": { "branching_strategy": "phase" }`
+- Override `"granularity": "coarse"` (if not already selected as Coarse)
+- Override `"parallelization": false`
 
 **Note:** Run `/gsd:settings` anytime to update model profile, workflow agents, branching strategy, and other preferences.
 
@@ -977,6 +1075,16 @@ Task(prompt="
 - .planning/config.json (Granularity and mode settings)
 </files_to_read>
 
+{If STACK_MODE is true, inject this block:}
+<delivery_context>
+**Delivery mode:** stack (stacked PRs)
+Design phases for linear, sequential delivery:
+- Each phase is a coherent stack of dependent changes
+- Prefer fewer, broader phases with multiple plans each
+- Plans within a phase are delivered as stacked PRs (plan N depends on plan N-1)
+- Avoid phases with heavy cross-phase file overlap (creates rebase pain)
+</delivery_context>
+
 </planning_context>
 
 <instructions>
@@ -1138,8 +1246,7 @@ PHASE1_SECTION=$(node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" roadmap ge
 PHASE1_HAS_UI=$(echo "$PHASE1_SECTION" | grep -qi "UI hint.*yes" && echo "true" || echo "false")
 ```
 
-**If Phase 1 has UI (`PHASE1_HAS_UI` is `true`):**
-
+**If `STACK_MODE` is true:**
 ```
 ───────────────────────────────────────────────────────────────
 
@@ -1147,21 +1254,20 @@ PHASE1_HAS_UI=$(echo "$PHASE1_SECTION" | grep -qi "UI hint.*yes" && echo "true" 
 
 **Phase 1: [Phase Name]** — [Goal from ROADMAP.md]
 
-/gsd:discuss-phase 1 — gather context and clarify approach
+/gsd:plan-phase 1 --stack
 
 <sub>/clear first → fresh context window</sub>
 
 ---
 
 **Also available:**
-- /gsd:ui-phase 1 — generate UI design contract (recommended for frontend phases)
-- /gsd:plan-phase 1 — skip discussion, plan directly
+- /gsd:discuss-phase 1 — gather context and clarify approach first
 
 ───────────────────────────────────────────────────────────────
 ```
+(Note: `--stack` is auto-detected from config.delivery, but shown explicitly for clarity on first run.)
 
-**If Phase 1 has no UI:**
-
+**If Phase 1 has UI (`PHASE1_HAS_UI` is `true`) and NOT `STACK_MODE`:**
 ```
 ───────────────────────────────────────────────────────────────
 

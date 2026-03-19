@@ -1,7 +1,7 @@
 ---
 name: gsd:new-project
 description: Initialize a new project with deep context gathering and PROJECT.md
-argument-hint: "[--auto]"
+argument-hint: "[--auto] [--empty] [--stack]"
 allowed-tools:
   - Read
   - Bash
@@ -12,6 +12,8 @@ allowed-tools:
 <context>
 **Flags:**
 - `--auto` — Automatic mode. After config questions, runs research → requirements → roadmap without further interaction. Expects idea document via @ reference.
+- `--empty` — Scaffold mode. Creates minimal `.planning/` structure (config, PROJECT.md, empty ROADMAP.md, STATE.md) with YOLO defaults and stops. No questions, no research, no agents, no requirements or phases. Accepts optional context via @ reference or pasted text to populate PROJECT.md basics.
+- `--stack` — Configure for stacked PR delivery. Sets coarse granularity, sequential execution, phase branching, and persists `delivery: "stack"` in config. Downstream commands auto-detect stack mode.
 </context>
 
 <objective>

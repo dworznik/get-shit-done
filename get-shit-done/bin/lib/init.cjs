@@ -104,6 +104,7 @@ function cmdInitExecutePhase(cwd, phase, raw) {
     verifier_model: resolveModelInternal(cwd, 'gsd-verifier'),
 
     // Config flags
+    delivery: config.delivery,
     commit_docs: config.commit_docs,
     sub_repos: config.sub_repos,
     parallelization: config.parallelization,
@@ -228,6 +229,9 @@ function cmdInitPlanPhase(cwd, phase, raw) {
     researcher_model: resolveModelInternal(cwd, 'gsd-phase-researcher'),
     planner_model: resolveModelInternal(cwd, 'gsd-planner'),
     checker_model: resolveModelInternal(cwd, 'gsd-plan-checker'),
+
+    // Config flags
+    delivery: config.delivery,
 
     // Workflow flags
     research_enabled: config.research,

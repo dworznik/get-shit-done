@@ -52,6 +52,7 @@ Usage: `/gsd:new-project`
 Flags:
 - `--auto` — Skip questions, extract context from provided document
 - `--empty` — Minimal scaffold only (config, PROJECT.md, ROADMAP.md, STATE.md). No questions, no agents. Good for focus-stack or manual setup.
+- `--stack` — Configure for stacked PR delivery. Sets coarse granularity, sequential execution, phase branching, and persists `delivery: "stack"` in config. Downstream commands (`plan-phase`, `execute-phase`) auto-detect stack mode.
 
 **`/gsd:import-plan [@file|pasted plan]`**
 Convert an agent-written markdown plan into GSD planning artifacts.

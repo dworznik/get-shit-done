@@ -192,6 +192,7 @@ function loadConfig(cwd) {
     model_profile: 'balanced',
     commit_docs: true,
     search_gitignored: false,
+    delivery: 'parallel',
     branching_strategy: 'none',
     phase_branch_template: 'gsd/phase-{phase}-{slug}',
     milestone_branch_template: 'gsd/{milestone}-{slug}',
@@ -293,6 +294,7 @@ function loadConfig(cwd) {
         return defaults.commit_docs;
       })(),
       search_gitignored: get('search_gitignored', { section: 'planning', field: 'search_gitignored' }) ?? defaults.search_gitignored,
+      delivery: get('delivery') ?? defaults.delivery,
       branching_strategy: get('branching_strategy', { section: 'git', field: 'branching_strategy' }) ?? defaults.branching_strategy,
       phase_branch_template: get('phase_branch_template', { section: 'git', field: 'phase_branch_template' }) ?? defaults.phase_branch_template,
       milestone_branch_template: get('milestone_branch_template', { section: 'git', field: 'milestone_branch_template' }) ?? defaults.milestone_branch_template,

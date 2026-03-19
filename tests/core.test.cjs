@@ -134,6 +134,18 @@ describe('loadConfig', () => {
     const config = loadConfig(tmpDir);
     assert.strictEqual(config.commit_docs, false);
   });
+
+  test('reads delivery from config', () => {
+    writeConfig({ delivery: 'stack' });
+    const config = loadConfig(tmpDir);
+    assert.strictEqual(config.delivery, 'stack');
+  });
+
+  test('delivery defaults to parallel', () => {
+    writeConfig({});
+    const config = loadConfig(tmpDir);
+    assert.strictEqual(config.delivery, 'parallel');
+  });
 });
 
 // ─── loadConfig commit_docs gitignore auto-detection (#1250) ──────────────────

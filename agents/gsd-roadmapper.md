@@ -210,6 +210,16 @@ Read granularity from config.json. Granularity controls compression tolerance.
 
 **Key:** Derive phases from work, then apply granularity as compression guidance. Don't pad small projects or compress complex ones.
 
+## Stack Delivery Mode
+
+When config.json contains `"delivery": "stack"`:
+- Phases are strictly sequential — each builds on all previous
+- Within each phase, plans are stacked PRs (plan N depends on plan N-1)
+- Prefer broader phases with more plans over many narrow phases
+- Each phase = coherent theme of work
+- Avoid phases with heavy cross-phase file overlap (rebase pain)
+- Anti-pattern: many 1-plan phases — defeats stacking purpose
+
 ## Good Phase Patterns
 
 **Foundation → Features → Enhancement**
