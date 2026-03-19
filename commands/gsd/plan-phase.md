@@ -1,7 +1,7 @@
 ---
 name: gsd:plan-phase
 description: Create detailed phase plan (PLAN.md) with verification loop
-argument-hint: "[phase] [--auto] [--research] [--skip-research] [--gaps] [--skip-verify] [--prd <file>] [--reviews] [--text]"
+argument-hint: "[phase] [--auto] [--research] [--skip-research] [--gaps] [--skip-verify] [--prd <file>] [--reviews] [--text] [--stack]"
 agent: gsd-planner
 allowed-tools:
   - Read
@@ -37,6 +37,7 @@ Phase number: $ARGUMENTS (optional — auto-detects next unplanned phase if omit
 - `--prd <file>` — Use a PRD/acceptance criteria file instead of discuss-phase. Parses requirements into CONTEXT.md automatically. Skips discuss-phase entirely.
 - `--reviews` — Replan incorporating cross-AI review feedback from REVIEWS.md (produced by `/gsd:review`)
 - `--text` — Use plain-text numbered lists instead of TUI menus (required for `/rc` remote sessions)
+- `--stack` — Plan for stacked PR delivery. Plans must be strictly linear (each depends on previous). Creates PHASE_DELIVERY.json.
 
 Normalize phase input in step 2 before any directory lookups.
 </context>

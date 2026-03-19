@@ -164,6 +164,15 @@ issue:
 - `depends_on: ["01"]` = Wave 2 minimum (must wait for 01)
 - Wave number = max(deps) + 1
 
+**Stack delivery rules (when PHASE_DELIVERY.json has `delivery: stack`):**
+- Plans MUST form a strict linear chain: plan N depends only on plan N-1
+- Wave numbers MUST be sequential: plan 01 = wave 1, plan 02 = wave 2, etc. No two plans share a wave.
+- No gaps in the dependency chain (every plan except 01 must have exactly one dependency)
+- File overlap between plans IS allowed (unlike parallel mode)
+- Flag violations as BLOCKER
+
+**Skip stack validation** when PHASE_DELIVERY.json is absent or has `delivery: parallel`.
+
 **Example issue:**
 ```yaml
 issue:

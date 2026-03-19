@@ -34,9 +34,11 @@ Parse JSON for: `researcher_model`, `planner_model`, `checker_model`, `research_
 
 ## 2. Parse and Normalize Arguments
 
-Extract from $ARGUMENTS: phase number (integer or decimal like `2.1`), flags (`--research`, `--skip-research`, `--gaps`, `--skip-verify`, `--prd <filepath>`, `--reviews`, `--text`).
+Extract from $ARGUMENTS: phase number (integer or decimal like `2.1`), flags (`--research`, `--skip-research`, `--gaps`, `--skip-verify`, `--prd <filepath>`, `--reviews`, `--text`, `--stack`).
 
 Set `TEXT_MODE=true` if `--text` is present in $ARGUMENTS OR `text_mode` from init JSON is `true`. When `TEXT_MODE` is active, replace every `AskUserQuestion` call with a plain-text numbered list and ask the user to type their choice number. This is required for Claude Code remote sessions (`/rc` mode) where TUI menus don't work through the Claude App.
+
+If `--stack` flag present, set `STACK_MODE=true`.
 
 Extract `--prd <filepath>` from $ARGUMENTS. If present, set PRD_FILE to the filepath.
 
@@ -512,6 +514,19 @@ Output consumed by /gsd:execute-phase. Plans need:
 - must_haves for goal-backward verification
 </downstream_consumer>
 
+{If STACK_MODE is true, inject this block into the planner prompt:}
+
+<delivery_mode>
+**Delivery:** stack (stacked PRs)
+
+Stack delivery constraints:
+- Plans MUST be strictly linear: plan 01 has no deps, plan 02 depends on [01], plan 03 depends on [02], etc.
+- Each plan gets its own wave: plan 01 = wave 1, plan 02 = wave 2, plan 03 = wave 3.
+- File overlap between plans IS ALLOWED (unlike parallel mode where file ownership must be exclusive).
+- Each plan should represent one reviewable PR unit — a coherent, self-contained change.
+- Order plans by natural implementation sequence (foundations first, features next, polish last).
+</delivery_mode>
+
 <deep_work_rules>
 ## Anti-Shallow Execution Rules (MANDATORY)
 
@@ -861,6 +876,78 @@ Display: `Max supervisor revision iterations reached. Blockers remain:` + findin
 
 Offer: 1) Force proceed, 2) Provide guidance and retry, 3) Abandon
 
+## 12.8. Write PHASE_DELIVERY.json (Stack Mode Only)
+
+**Skip if:** `STACK_MODE` is not true.
+
+After plans pass verification (or checker is skipped), write the delivery mode file:
+
+```bash
+node -e "
+const fs = require('fs');
+fs.writeFileSync('${PHASE_DIR}/PHASE_DELIVERY.json', JSON.stringify({
+  delivery: 'stack',
+  created_at: new Date().toISOString()
+}, null, 2));
+"
+```
+
+Commit:
+```bash
+node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" commit "docs(${padded_phase}): set stack delivery mode" --files "${PHASE_DIR}/PHASE_DELIVERY.json"
+```
+
+## 13. Requirements Coverage Gate
+
+After plans pass the checker (or checker is skipped), verify that all phase requirements are covered by at least one plan.
+
+**Skip if:** `phase_req_ids` is null or TBD (no requirements mapped to this phase).
+
+**Step 1: Extract requirement IDs claimed by plans**
+```bash
+# Collect all requirement IDs from plan frontmatter
+PLAN_REQS=$(grep -h "requirements_addressed\|requirements:" ${PHASE_DIR}/*-PLAN.md 2>/dev/null | tr -d '[]' | tr ',' '\n' | sed 's/^[[:space:]]*//' | sort -u)
+```
+
+**Step 2: Compare against phase requirements from ROADMAP**
+
+For each REQ-ID in `phase_req_ids`:
+- If REQ-ID appears in `PLAN_REQS` → covered ✓
+- If REQ-ID does NOT appear in any plan → uncovered ✗
+
+**Step 3: Check CONTEXT.md features against plan objectives**
+
+Read CONTEXT.md `<decisions>` section. Extract feature/capability names. Check each against plan `<objective>` blocks. Features not mentioned in any plan objective → potentially dropped.
+
+**Step 4: Report**
+
+If all requirements covered and no dropped features:
+```
+✓ Requirements coverage: {N}/{N} REQ-IDs covered by plans
+```
+→ Proceed to step 14.
+
+If gaps found:
+```
+## ⚠ Requirements Coverage Gap
+
+{M} of {N} phase requirements are not assigned to any plan:
+
+| REQ-ID | Description | Plans |
+|--------|-------------|-------|
+| {id} | {from REQUIREMENTS.md} | None |
+
+{K} CONTEXT.md features not found in plan objectives:
+- {feature_name} — described in CONTEXT.md but no plan covers it
+
+Options:
+1. Re-plan to include missing requirements (recommended)
+2. Move uncovered requirements to next phase
+3. Proceed anyway — accept coverage gaps
+```
+
+Use AskUserQuestion to present the options.
+
 ## 14. Present Final Status
 
 Route to `<offer_next>` OR `auto_advance` depending on flags/config.
@@ -925,7 +1012,44 @@ Route to `<offer_next>` (existing behavior).
 </process>
 
 <offer_next>
-Output this markdown directly (not as a code block):
+
+**If STACK_MODE is true**, output this markdown directly (not as a code block):
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ GSD ► PHASE {X} PLANNED ✓ (Stacked PRs)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+**Phase {X}: {Name}** — {N} plan(s), stacked PR delivery
+
+| Order | Plan | What it builds |
+|-------|------|----------------|
+| 1     | 01   | [objective]    |
+| 2     | 02   | [objective]    |
+| 3     | 03   | [objective]    |
+
+Delivery: Stacked PRs
+Research: {Completed | Used existing | Skipped}
+Verification: {Passed | Passed with override | Skipped}
+
+───────────────────────────────────────────────────────────────
+
+## ▶ Next Up
+
+**Execute Phase {X} (Stack)** — deliver {N} plans as stacked PRs
+
+/gsd:execute-phase {X} --stack
+
+<sub>/clear first → fresh context window</sub>
+
+───────────────────────────────────────────────────────────────
+
+**Also available:**
+- cat .planning/phases/{phase-dir}/*-PLAN.md — review plans
+- /gsd:plan-phase {X} --research — re-research first
+
+───────────────────────────────────────────────────────────────
+
+**Otherwise (not stack mode)**, output this markdown directly (not as a code block):
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  GSD ► PHASE {X} PLANNED ✓

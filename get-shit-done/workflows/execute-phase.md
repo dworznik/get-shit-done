@@ -81,6 +81,16 @@ signals are unreliable (see `<runtime_compatibility>`). Set `COPILOT_SEQUENTIAL=
 internally and skip the `execute_waves` step in favor of `check_interactive_mode`'s
 inline path for each plan.
 
+**Parse `--stack` flag from $ARGUMENTS.** Also check for `PHASE_DELIVERY.json`:
+
+```bash
+if [ -f "${PHASE_DIR}/PHASE_DELIVERY.json" ]; then
+  DELIVERY_MODE=$(node -e "process.stdout.write(JSON.parse(require('fs').readFileSync('${PHASE_DIR}/PHASE_DELIVERY.json','utf8')).delivery||'parallel')")
+fi
+```
+
+If `--stack` flag present OR `DELIVERY_MODE` is `stack` → set `STACK_MODE=true`. Record `BASE_BRANCH=$(git branch --show-current)`.
+
 **REQUIRED — Sync chain flag with intent.** If user invoked manually (no `--auto`), clear the ephemeral chain flag from any previous interrupted `--auto` chain. This prevents stale `_auto_chain_active: true` from causing unwanted auto-advance. This does NOT touch `workflow.auto_advance` (the user's persistent settings preference). You MUST execute this bash block before any config reads:
 ```bash
 # REQUIRED: prevents stale auto-chain from previous --auto runs
@@ -139,6 +149,10 @@ checkpoints between tasks. The user can review, modify, or redirect work at any 
 </step>
 
 <step name="handle_branching">
+**If `STACK_MODE` is true:** Skip normal branching — stack mode creates its own branches per plan. Stay on `BASE_BRANCH`. Continue to next step.
+
+**Otherwise:**
+
 Check `branching_strategy` from init:
 
 **"none":** Skip, continue on current branch.
@@ -218,6 +232,40 @@ Parse JSON for: `phase`, `plans[]` (each with `id`, `wave`, `autonomous`, `objec
 
 If all filtered: "No matching incomplete plans" → exit.
 
+**If `STACK_MODE` is true:**
+
+Display linear plan order instead of wave table. Load or create `STACK_STATE.json`:
+
+```bash
+STACK_STATE_FILE="${PHASE_DIR}/STACK_STATE.json"
+if [ -f "$STACK_STATE_FILE" ]; then
+  echo "Resuming stack execution from existing STACK_STATE.json"
+  STACK_STATE=$(cat "$STACK_STATE_FILE")
+else
+  # Will be created during execute_stack step
+  echo "Fresh stack execution"
+fi
+```
+
+Report (stack mode):
+```
+## Execution Plan (Stacked PRs)
+
+**Phase {X}: {Name}** — {total_plans} plans as stacked PRs
+
+| Order | Plan | What it builds |
+|-------|------|----------------|
+| 1     | {plan_01_id} | {objective, 3-8 words} |
+| 2     | {plan_02_id} | {objective, 3-8 words} |
+| 3     | {plan_03_id} | {objective, 3-8 words} |
+
+Base branch: {BASE_BRANCH}
+```
+
+Skip to `execute_stack` step.
+
+**Otherwise (not stack mode):**
+
 Report:
 ```
 ## Execution Plan
@@ -231,6 +279,212 @@ Report:
 | 1 | 01-01, 01-02 | {from plan objectives, 3-8 words} |
 | 2 | 01-03 | ... |
 ```
+</step>
+
+<step name="execute_stack">
+**Only run this step when `STACK_MODE` is true.** This replaces `execute_waves`.
+
+### Resume Behavior
+
+When `STACK_STATE.json` exists with completed plans:
+
+1. **Restack check:** For each completed plan, compare current HEAD SHA against stored `head_sha`:
+   ```bash
+   for each completed plan in STACK_STATE.plans:
+     CURRENT_SHA=$(git rev-parse ${plan.branch})
+     if CURRENT_SHA != plan.head_sha:
+       mark all descendants as needs_restack
+   ```
+
+2. **Rebase descendants that need restacking:**
+   ```bash
+   for each plan marked needs_restack (in order):
+     git checkout ${plan.branch}
+     git rebase ${plan.parent_branch}
+     if rebase conflicts:
+       git rebase --abort
+       mark plan as "restack-conflict"
+       mark all further descendants as "blocked-by-ancestor"
+       STOP with message: "Restack conflict on ${plan.branch}. Resolve manually, then resume with /gsd:execute-phase {X} --stack"
+     # Update head_sha after successful restack
+     plan.head_sha = $(git rev-parse HEAD)
+     plan.last_restacked_sha = plan.head_sha
+   ```
+
+3. **Skip completed plans** — resume from first plan with status `pending`.
+
+### Fresh Execution
+
+Initialize `STACK_STATE.json`:
+```json
+{
+  "base_branch": "${BASE_BRANCH}",
+  "phase_number": ${PHASE_NUMBER},
+  "phase_slug": "${PHASE_SLUG}",
+  "plans": []
+}
+```
+
+### Per-Plan Execution Loop
+
+For each plan in linear order:
+
+**1. Determine branches:**
+- Plan 01 parent: `$BASE_BRANCH`
+- Plan N parent: branch of plan N-1
+- Branch name: `stack-${PHASE_SLUG}-${NN}-${plan_slug}`
+
+  Where `plan_slug` is derived from the plan objective (lowercase, hyphens, max 30 chars).
+
+**2. Create branch from parent:**
+```bash
+git checkout ${PARENT_BRANCH}
+git checkout -b ${PLAN_BRANCH}
+```
+
+**3. Spawn gsd-executor** (sequential, standard prompt — same as execute_waves but single plan):
+
+```
+Task(
+  subagent_type="gsd-executor",
+  model="{executor_model}",
+  prompt="
+    <objective>
+    Execute plan {plan_number} of phase {phase_number}-{phase_name}.
+    Commit each task atomically. Create SUMMARY.md. Update STATE.md and ROADMAP.md.
+    </objective>
+
+    <execution_context>
+    @~/.claude/get-shit-done/workflows/execute-plan.md
+    @~/.claude/get-shit-done/templates/summary.md
+    @~/.claude/get-shit-done/references/checkpoints.md
+    @~/.claude/get-shit-done/references/tdd.md
+    </execution_context>
+
+    <files_to_read>
+    Read these files at execution start using the Read tool:
+    - {phase_dir}/{plan_file} (Plan)
+    - .planning/PROJECT.md (Project context)
+    - .planning/STATE.md (State)
+    - .planning/config.json (Config, if exists)
+    - ./CLAUDE.md (Project instructions, if exists)
+    - .claude/skills/ or .agents/skills/ (Project skills, if either exists)
+    </files_to_read>
+
+    <success_criteria>
+    - [ ] All tasks executed
+    - [ ] Each task committed individually
+    - [ ] SUMMARY.md created in plan directory
+    - [ ] STATE.md updated with position and decisions
+    - [ ] ROADMAP.md updated with plan progress
+    </success_criteria>
+  "
+)
+```
+
+**4. After executor completes, squash to single commit:**
+```bash
+git reset --soft ${PARENT_BRANCH}
+git commit -m "feat(phase-${PHASE_NUMBER}): [${NN}/${TOTAL}] ${plan_objective}"
+```
+
+Verify exactly one commit:
+```bash
+COMMIT_COUNT=$(git log --oneline ${PARENT_BRANCH}..HEAD | wc -l)
+if [ "$COMMIT_COUNT" -ne 1 ]; then
+  echo "ERROR: Expected 1 commit after squash, got ${COMMIT_COUNT}"
+fi
+```
+
+**5. Push and create PR:**
+```bash
+git push -u origin ${PLAN_BRANCH}
+
+# Determine PR base
+if [ "${NN}" = "01" ]; then
+  PR_BASE="${BASE_BRANCH}"
+else
+  PR_BASE="${PREV_PLAN_BRANCH}"
+fi
+
+PARENT_PR_INFO=""
+if [ -n "${PREV_PR_URL}" ]; then
+  PARENT_PR_INFO="Parent PR: ${PREV_PR_URL}"
+fi
+
+gh pr create \
+  --base "${PR_BASE}" \
+  --title "[${NN}/${TOTAL}] Phase ${PHASE_NUMBER}: ${plan_name}" \
+  --body "$(cat <<EOF
+## Stack: Phase ${PHASE_NUMBER} — ${NN}/${TOTAL}
+
+**Plan:** ${plan_name}
+**Objective:** ${plan_objective}
+
+${PARENT_PR_INFO}
+
+---
+Part of phase ${PHASE_NUMBER} stacked PR delivery.
+EOF
+)"
+```
+
+Extract PR number and URL from `gh pr create` output.
+
+**6. Per-plan verification:** Spawn gsd-verifier scoped to this plan's `must_haves`:
+
+```
+Task(
+  subagent_type="gsd-verifier",
+  model="{verifier_model}",
+  prompt="Verify plan ${plan_id} must_haves against codebase.
+  Phase directory: ${phase_dir}
+  Plan file: ${plan_file}
+  Check only this plan's must_haves, not the full phase."
+)
+```
+
+**7. Update STACK_STATE.json:**
+
+Add or update the plan entry:
+```json
+{
+  "plan_id": "${PHASE_NUM}-${NN}",
+  "title": "${plan_name}",
+  "status": "complete",
+  "branch": "${PLAN_BRANCH}",
+  "parent_branch": "${PR_BASE}",
+  "pr_number": ${PR_NUMBER},
+  "pr_url": "${PR_URL}",
+  "head_sha": "$(git rev-parse HEAD)",
+  "last_restacked_sha": null
+}
+```
+
+Write updated STACK_STATE.json to disk after each plan completes.
+
+**8. On failure:** If executor or verification fails:
+- Mark this plan as `failed` in STACK_STATE.json
+- Mark all subsequent plans as `blocked-by-ancestor`
+- Write STACK_STATE.json
+- Stop execution with recovery instructions:
+
+```
+## ⚠ Stack Execution Failed
+
+Plan ${NN}/${TOTAL} (${plan_name}) failed.
+
+Remaining plans blocked. To recover:
+1. Fix the issue on branch: ${PLAN_BRANCH}
+2. Resume: /gsd:execute-phase ${PHASE_NUMBER} --stack
+   OR
+3. Debug: /gsd:debug "${failure_reason}"
+```
+
+### End of Stack Loop
+
+After all plans complete successfully, write final STACK_STATE.json and proceed to `aggregate_results`.
+
 </step>
 
 <step name="execute_waves">
@@ -980,6 +1234,25 @@ Read and follow `~/.claude/get-shit-done/workflows/transition.md`, passing throu
 **STOP. Do not auto-advance. Do not execute transition. Do not plan next phase. Present options to the user and wait.**
 
 **IMPORTANT: There is NO `/gsd:transition` command. Never suggest it. The transition workflow is internal only.**
+
+**If `STACK_MODE` is true:** Show stack status table with PR links instead of standard completion:
+
+```
+## ✓ Phase {X}: {Name} Complete (Stacked PRs)
+
+| # | Plan | Branch | PR | Status |
+|---|------|--------|----|--------|
+{For each plan in STACK_STATE.json:}
+| {NN} | {title} | {branch} | #{pr_number} ({pr_url}) | {status} |
+
+All {TOTAL} PRs created. Review and merge in order (bottom-up).
+
+/gsd:progress — see updated roadmap
+/gsd:discuss-phase {next} — discuss next phase before planning
+/gsd:plan-phase {next} — plan next phase
+```
+
+**Otherwise (not stack mode):**
 
 ```
 ## ✓ Phase {X}: {Name} Complete

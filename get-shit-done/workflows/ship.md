@@ -29,6 +29,30 @@ Extract: `branching_strategy`, `branch_name`.
 <step name="preflight_checks">
 Verify the work is ready to ship:
 
+0. **Stacked delivery check:**
+   ```bash
+   if [ -f "${PHASE_DIR}/PHASE_DELIVERY.json" ]; then
+     DELIVERY_MODE=$(node -e "process.stdout.write(JSON.parse(require('fs').readFileSync('${PHASE_DIR}/PHASE_DELIVERY.json','utf8')).delivery||'parallel')")
+   fi
+   ```
+
+   If `DELIVERY_MODE` is `stack`:
+   - Read `STACK_STATE.json` from the phase directory
+   - Display PR status table:
+     ```
+     ## Phase {X}: Stacked PR Delivery
+
+     PRs were already created during execution. Review and merge in order:
+
+     | # | Plan | PR | Status |
+     |---|------|----|--------|
+     {For each plan in STACK_STATE.json:}
+     | {NN} | {title} | #{pr_number} ({pr_url}) | {status} |
+
+     Merge bottom-up (PR #1 first, then #2 on top, etc.)
+     ```
+   - **Exit.** No additional PR creation needed — PRs already exist.
+
 1. **Verification passed?**
    ```bash
    VERIFICATION=$(cat ${PHASE_DIR}/*-VERIFICATION.md 2>/dev/null)

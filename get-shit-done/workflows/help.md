@@ -49,6 +49,9 @@ Creates all `.planning/` artifacts:
 - `STATE.md` — project memory
 
 Usage: `/gsd:new-project`
+Flags:
+- `--auto` — Skip questions, extract context from provided document
+- `--empty` — Minimal scaffold only (config, PROJECT.md, ROADMAP.md, STATE.md). No questions, no agents. Good for focus-stack or manual setup.
 
 **`/gsd:import-plan [@file|pasted plan]`**
 Convert an agent-written markdown plan into GSD planning artifacts.
@@ -115,6 +118,7 @@ Create detailed execution plan for a specific phase.
 - Blocked supervisor findings can trigger a targeted planner revise-and-rerun loop before `/gsd:execute-phase`
 
 Usage: `/gsd:plan-phase 1`
+Usage: `/gsd:plan-phase 1 --stack` — plan for stacked PR delivery (linear deps, no parallel waves)
 Result: Creates `.planning/phases/01-foundation/01-01-PLAN.md`
 
 **PRD Express Path:** Pass `--prd path/to/requirements.md` to skip discuss-phase entirely. Your PRD becomes locked decisions in CONTEXT.md. Useful when you already have clear acceptance criteria.
@@ -134,6 +138,7 @@ Execute all plans in a phase, or run a specific wave.
 
 Usage: `/gsd:execute-phase 5`
 Usage: `/gsd:execute-phase 5 --wave 2`
+Usage: `/gsd:execute-phase 5 --stack` — deliver plans as stacked PRs (auto-detected from PHASE_DELIVERY.json)
 
 ### Smart Router
 

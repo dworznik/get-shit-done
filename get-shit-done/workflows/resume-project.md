@@ -101,7 +101,14 @@ fi
 **If PLAN without SUMMARY exists:**
 
 - Execution was started but not completed
-- Flag: "Found incomplete plan execution"
+- Check for stack delivery in the phase directory:
+  ```bash
+  ls ${phase_dir}/STACK_STATE.json 2>/dev/null
+  ```
+  - If STACK_STATE.json exists: Flag: "Found incomplete stack execution"
+    Show stack status (completed/pending/failed plans).
+    Suggest: `/gsd:execute-phase {X} --stack` to resume.
+  - Otherwise: Flag: "Found incomplete plan execution"
 
 **If interrupted agent found:**
 

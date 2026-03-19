@@ -371,6 +371,16 @@ files_modified: [src/models/product.ts, src/api/products.ts]
 
 No overlap → can run parallel. File in multiple plans → later plan depends on earlier.
 
+## Stack Delivery Mode
+
+When the orchestrator provides `<delivery_mode>` with `delivery: stack`:
+
+- **Linear only:** Every plan depends on the previous. No parallel waves.
+- **File overlap OK:** Unlike parallel mode, plans CAN modify the same files.
+- **PR-sized units:** Each plan should be a coherent, reviewable change.
+- **Natural order:** Order by implementation sequence, not parallelizability.
+- **Wave assignment:** plan 01 = wave 1, plan 02 = wave 2, etc.
+
 </dependency_graph>
 
 <scope_estimation>

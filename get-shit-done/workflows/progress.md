@@ -150,6 +150,27 @@ ls -1 .planning/phases/[current-phase-dir]/*-UAT.md 2>/dev/null | wc -l
 
 State: "This phase has {X} plans, {Y} summaries."
 
+**Step 1.25: Check for stack delivery**
+
+```bash
+STACK_STATE_FILE=".planning/phases/[current-phase-dir]/STACK_STATE.json"
+if [ -f "$STACK_STATE_FILE" ]; then
+  STACK_STATE=$(cat "$STACK_STATE_FILE")
+  STACK_TOTAL=$(node -e "const s=JSON.parse(require('fs').readFileSync('$STACK_STATE_FILE','utf8')); process.stdout.write(String(s.plans.length))")
+  STACK_COMPLETE=$(node -e "const s=JSON.parse(require('fs').readFileSync('$STACK_STATE_FILE','utf8')); process.stdout.write(String(s.plans.filter(p=>p.status==='complete').length))")
+fi
+```
+
+If `STACK_STATE.json` exists, include stack progress in the report:
+```
+**Stack Delivery:** {STACK_COMPLETE}/{STACK_TOTAL} plans delivered as PRs
+```
+
+And in the position section, show:
+```
+Delivery: Stacked PRs ({STACK_COMPLETE}/{STACK_TOTAL} complete)
+```
+
 **Step 1.5: Check for unaddressed UAT gaps**
 
 Check for UAT.md files with status "diagnosed" (has gaps needing fixes).
