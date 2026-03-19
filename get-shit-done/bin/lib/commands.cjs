@@ -464,7 +464,7 @@ function collectDependencyPhaseContext(cwd, dependencyPhaseNumbers) {
 function markdownSection(content, heading) {
   if (!content) return null;
   const escaped = heading.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const regex = new RegExp(`^## ${escaped}\\s*\\n([\\s\\S]*?)(?=^##\\s|\\Z)`, 'm');
+  const regex = new RegExp(`^## ${escaped}\\s*\\n([\\s\\S]*?)(?=^##\\s|$(?![\\s\\S]))`, 'm');
   const match = content.match(regex);
   return match ? match[1].trim() : null;
 }
