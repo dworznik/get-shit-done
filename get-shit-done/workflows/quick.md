@@ -533,7 +533,7 @@ If gaps are found, offer:
 - re-run executor to close them
 - accept as-is
 
-Update `RUN_MANIFEST.json` `verification_status` to the mapped verification status.
+Update `RUN_MANIFEST.json` `verification_status` to the raw verifier status (`passed`, `human_needed`, or `gaps_found`). Use the mapped display label only for banners and STATE.md output.
 
 ---
 
