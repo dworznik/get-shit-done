@@ -1034,10 +1034,11 @@ function detectRuntimeContext(invocationPath = process.argv[1] || '') {
     process.env.OPENCODE_CONFIG_DIR || '',
   ].map(value => String(value).replace(/\\/g, '/').toLowerCase());
 
-  if (candidates.some(value => value.includes('/.codex/'))) return 'codex';
-  if (candidates.some(value => value.includes('/.gemini/'))) return 'gemini';
-  if (candidates.some(value => value.includes('/.opencode/'))) return 'opencode';
-  if (candidates.some(value => value.includes('/.claude/'))) return 'claude';
+  const hasDir = name => candidates.some(value => new RegExp(`(^|/)\\.${name}(/|$)`).test(value));
+  if (hasDir('codex')) return 'codex';
+  if (hasDir('gemini')) return 'gemini';
+  if (hasDir('opencode')) return 'opencode';
+  if (hasDir('claude')) return 'claude';
   return 'claude';
 }
 
