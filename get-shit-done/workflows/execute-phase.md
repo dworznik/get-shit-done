@@ -748,6 +748,25 @@ Update `${PHASE_DIR}/PHASE_RUN_MANIFEST.json` with:
 - `verification_status: passed` or `human_needed-approved`
 - `final_status: verified`
 
+Do the write explicitly before bundle generation:
+```bash
+PHASE_RUN_MANIFEST="${PHASE_DIR}/PHASE_RUN_MANIFEST.json"
+PHASE_VERIFICATION_STATUS="${PHASE_VERIFICATION_STATUS}"
+PHASE_RUN_MANIFEST="$PHASE_RUN_MANIFEST" PHASE_VERIFICATION_STATUS="$PHASE_VERIFICATION_STATUS" node <<'NODE'
+const fs = require('fs');
+const manifestPath = process.env.PHASE_RUN_MANIFEST;
+const manifest = fs.existsSync(manifestPath)
+  ? JSON.parse(fs.readFileSync(manifestPath, 'utf8'))
+  : {};
+manifest.execution_status = 'completed';
+manifest.verification_status = process.env.PHASE_VERIFICATION_STATUS || 'passed';
+manifest.final_status = 'verified';
+fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+NODE
+```
+
+`PHASE_VERIFICATION_STATUS` must be set to `passed` or `human_needed-approved` based on the verifier result before running this block. Do not build the execute bundle until this write succeeds.
+
 Build the execute bundle:
 ```bash
 PHASE_EXECUTE_BUNDLE=$(node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" supervisor-bundle "$PHASE_DIR" --kind phase --stage execute --raw)

@@ -515,6 +515,69 @@ describe('supervisor bundle commands', () => {
     assert.strictEqual(bundle.execution.completion_ready.verification_passed, true);
     assert.strictEqual(bundle.execution.completion_ready.ready_for_phase_complete, true);
   });
+
+  test('falls back to verification artifact when execute manifest status is stale', () => {
+    writePhaseArtifacts(tmpDir);
+    const manifestPath = path.join(tmpDir, '.planning', 'phases', '03-api', 'PHASE_RUN_MANIFEST.json');
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
+    manifest.verification_status = 'pending';
+    manifest.final_status = 'executed';
+    fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2), 'utf-8');
+
+    const result = runGsdTools('supervisor-bundle .planning/phases/03-api --kind phase --stage execute', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+
+    const output = JSON.parse(result.output);
+    const bundle = JSON.parse(fs.readFileSync(path.join(tmpDir, output.bundle_path), 'utf-8'));
+    assert.strictEqual(bundle.phase.verification_status, 'passed');
+    assert.strictEqual(bundle.phase.final_status, 'verified');
+    assert.strictEqual(bundle.execution.completion_ready.verification_passed, true);
+    assert.strictEqual(bundle.execution.completion_ready.ready_for_phase_complete, true);
+  });
+
+  test('extracts summary metadata from freeform summary content', () => {
+    writePhaseArtifacts(tmpDir);
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', '03-api');
+    const summaryPath = path.join(phaseDir, '03-01-SUMMARY.md');
+    fs.writeFileSync(summaryPath, [
+      '---',
+      'commits:',
+      '  - hash: 8a43f3e',
+      '  - hash: 4b54176',
+      '---',
+      '',
+      '# Phase 03-01 Summary',
+      '',
+      '## What was built',
+      '**Established typed API contracts for shared request/response schemas**',
+      '',
+      'Implemented reusable contracts in `src/composite/schemas.ts` and `src/composite/index.ts`.',
+      '',
+      '## Files Created/Modified',
+      '- `src/composite/schemas.ts` - shared schemas',
+      '- `src/composite/index.ts` - public exports',
+      '',
+      '## Decisions Made',
+      '- Preserve schema export shape: Keeps downstream imports stable',
+      '- Derive types from schemas: Avoids duplicate contract definitions',
+      '',
+      '## Self-Check: PASSED',
+      '',
+    ].join('\n'), 'utf-8');
+
+    const result = runGsdTools('supervisor-bundle .planning/phases/03-api --kind phase --stage execute', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+
+    const output = JSON.parse(result.output);
+    const bundle = JSON.parse(fs.readFileSync(path.join(tmpDir, output.bundle_path), 'utf-8'));
+    const summary = bundle.execution.summaries.find(item => item.plan_id === '03-01');
+
+    assert.strictEqual(summary.one_liner, 'Established typed API contracts for shared request/response schemas');
+    assert.deepStrictEqual(summary.requirements_completed, ['PH-03-01']);
+    assert.deepStrictEqual(summary.key_files.all.sort(), ['src/composite/index.ts', 'src/composite/schemas.ts']);
+    assert.strictEqual(summary.decisions.length, 2);
+    assert.deepStrictEqual(summary.commit_hashes.sort(), ['4b54176', '8a43f3e']);
+  });
 });
 
 describe('supervisor launch and wait commands', () => {

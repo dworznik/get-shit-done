@@ -510,6 +510,9 @@ function extractCommitHashes(summaryContent) {
   for (const match of summaryContent.matchAll(/`([a-f0-9]{7,40})`/g)) {
     hashes.add(match[1]);
   }
+  for (const match of summaryContent.matchAll(/(?:^|\n)\s*(?:-\s*)?hash:\s*"?([a-f0-9]{7,40})"?\s*(?:\n|$)/gmi)) {
+    hashes.add(match[1]);
+  }
   return [...hashes];
 }
 
@@ -537,6 +540,66 @@ function extractVerificationStatus(verificationContent) {
   if (frontmatter.status) return frontmatter.status;
   const inline = verificationContent.match(/^status:\s*([a-z_]+)/mi);
   return inline ? inline[1] : null;
+}
+
+function extractFirstBoldLine(content) {
+  if (!content) return null;
+  const match = content.match(/^\*\*([^*\n][\s\S]*?)\*\*\s*$/m);
+  return match ? match[1].trim() : null;
+}
+
+function extractLeadingBulletValues(section) {
+  if (!section) return [];
+  return section
+    .split('\n')
+    .map(line => line.trim())
+    .filter(line => /^[-*]\s+/.test(line))
+    .map(line => line.replace(/^[-*]\s+/, '').trim())
+    .filter(Boolean);
+}
+
+function extractCodePaths(text) {
+  if (!text) return [];
+  const paths = new Set();
+  for (const match of text.matchAll(/`([^`\n]+\.[a-z0-9._/-]+)`/gi)) {
+    paths.add(match[1].trim());
+  }
+  return [...paths];
+}
+
+function parseDecisionLines(section) {
+  return extractLeadingBulletValues(section).map(entry => {
+    const colonIdx = entry.indexOf(':');
+    if (colonIdx > 0) {
+      return {
+        summary: entry.slice(0, colonIdx).trim(),
+        rationale: entry.slice(colonIdx + 1).trim() || null,
+      };
+    }
+    return { summary: entry, rationale: null };
+  });
+}
+
+function inferSummaryOneLiner(content) {
+  return extractFirstBoldLine(content)
+    || markdownSection(content, 'One-liner')
+    || markdownSection(content, 'What was built')
+    || null;
+}
+
+function inferSummaryKeyFiles(content) {
+  const sections = [
+    markdownSection(content, 'Files Created/Modified'),
+    markdownSection(content, 'Key Files'),
+    markdownSection(content, 'What was built'),
+  ].filter(Boolean);
+  const discovered = new Set();
+  for (const section of sections) {
+    for (const filePath of extractCodePaths(section)) {
+      discovered.add(filePath);
+    }
+  }
+  return [...discovered];
 }
 
 function findStackContext(cwd, quickRelDir) {
@@ -620,25 +683,33 @@ function summarizePlan(cwd, planPath) {
   };
 }
 
-function summarizeSummary(cwd, summaryPath) {
+function summarizeSummary(cwd, summaryPath, options = {}) {
   if (!summaryPath) return null;
   const content = readTextIfExists(summaryPath);
   if (!content) return null;
   const frontmatter = extractFrontmatter(content);
   const keyFiles = frontmatter['key-files'] || {};
-  const created = keyFiles.created || [];
-  const modified = keyFiles.modified || [];
+  const inferredKeyFiles = inferSummaryKeyFiles(content);
+  const created = Array.isArray(keyFiles.created) ? keyFiles.created : [];
+  const modified = Array.isArray(keyFiles.modified) ? keyFiles.modified : (Array.isArray(keyFiles) ? keyFiles : []);
+  const oneLiner = frontmatter['one-liner'] || inferSummaryOneLiner(content);
+  const requirementsCompleted = Array.isArray(frontmatter['requirements-completed']) && frontmatter['requirements-completed'].length > 0
+    ? frontmatter['requirements-completed']
+    : (options.fallbackRequirements || []);
+  const decisions = Array.isArray(frontmatter['key-decisions']) && frontmatter['key-decisions'].length > 0
+    ? frontmatter['key-decisions']
+    : parseDecisionLines(markdownSection(content, 'Decisions Made'));
 
   return {
     path: toRelOrNull(cwd, summaryPath),
-    one_liner: frontmatter['one-liner'] || null,
-    requirements_completed: frontmatter['requirements-completed'] || [],
+    one_liner: oneLiner || null,
+    requirements_completed: requirementsCompleted,
     key_files: {
       created,
       modified,
-      all: [...new Set([...created, ...modified])],
+      all: [...new Set([...created, ...modified, ...inferredKeyFiles])],
     },
-    decisions: frontmatter['key-decisions'] || [],
+    decisions,
     deviations_section: markdownSection(content, 'Deviations from Plan'),
     issues_section: markdownSection(content, 'Issues Encountered'),
     self_check: extractSelfCheck(content),
@@ -724,6 +795,18 @@ function cmdSupervisorBundle(cwd, dirArg, stage, raw, kind = 'quick') {
     const dependsOn = extractDependsOnPhases(roadmapPhase?.section || '');
     const phaseRequirements = extractRequirementsFromRoadmapSection(roadmapPhase?.section || '');
     const dependencyPhases = collectDependencyPhaseContext(cwd, dependsOn.phase_numbers);
+    const verification = stage === 'execute' ? summarizeVerification(cwd, verificationPath) : null;
+    const manifestVerificationStatus = manifest.verification_status || null;
+    const effectiveVerificationStatus =
+      verification?.status && (!manifestVerificationStatus || manifestVerificationStatus === 'pending')
+        ? verification.status
+        : manifestVerificationStatus;
+    const effectiveFinalStatus =
+      manifest.final_status && manifest.final_status !== 'executed'
+        ? manifest.final_status
+        : (effectiveVerificationStatus === 'passed' || effectiveVerificationStatus === 'human_needed-approved')
+          ? 'verified'
+          : manifest.final_status || null;
 
     const bundle = {
       kind: 'phase',
@@ -743,10 +826,10 @@ function cmdSupervisorBundle(cwd, dirArg, stage, raw, kind = 'quick') {
         planner_status: manifest.planner_status || null,
         checker_status: manifest.checker_status || null,
         execution_status: manifest.execution_status || null,
-        verification_status: manifest.verification_status || null,
+        verification_status: effectiveVerificationStatus,
         supervisor_plan_status: manifest.supervisor_plan_status || null,
         supervisor_execute_status: manifest.supervisor_execute_status || null,
-        final_status: manifest.final_status || null,
+        final_status: effectiveFinalStatus,
         runtime_context: manifest.supervisor_runtime || null,
         supervisor_transport: manifest.supervisor_transport || null,
       },
@@ -776,16 +859,18 @@ function cmdSupervisorBundle(cwd, dirArg, stage, raw, kind = 'quick') {
     };
 
     if (stage === 'execute') {
-      const verification = summarizeVerification(cwd, verificationPath);
       const uat = summarizeUat(cwd, uatPath);
-      const effectiveVerificationStatus = manifest.verification_status || verification?.status || null;
       const verificationPassed =
         effectiveVerificationStatus === 'passed' ||
         effectiveVerificationStatus === 'human_needed-approved';
       const summaries = (phaseInfo?.summaries || planIndex.summary_paths.map(summaryPath => path.basename(summaryPath))).map(name => {
-        const summary = summarizeSummary(cwd, path.join(fullPath, name)) || {};
+        const planId = name.replace('-SUMMARY.md', '').replace('SUMMARY.md', '');
+        const matchingPlan = planIndex.plans.find(plan => plan.id === planId);
+        const summary = summarizeSummary(cwd, path.join(fullPath, name), {
+          fallbackRequirements: matchingPlan?.requirements || [],
+        }) || {};
         return {
-          plan_id: name.replace('-SUMMARY.md', '').replace('SUMMARY.md', ''),
+          plan_id: planId,
           ...summary,
         };
       });
