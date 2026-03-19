@@ -2167,6 +2167,132 @@ function cmdStats(cwd, format, raw) {
   }
 }
 
+function cmdFeedbackPoll(cwd, prNumber, optionArgs, raw) {
+  if (!prNumber) {
+    error('Usage: feedback-poll <pr_number> [--bots <names>] [--timeout <seconds>] [--interval <ms>]');
+  }
+
+  const pr = Number(prNumber);
+  if (!Number.isInteger(pr) || pr <= 0) {
+    error(`Invalid PR number: ${prNumber}`);
+  }
+
+  const botsIdx = optionArgs.indexOf('--bots');
+  const botFilter = botsIdx !== -1 && optionArgs[botsIdx + 1]
+    ? optionArgs[botsIdx + 1].split(',').map(b => b.trim().toLowerCase())
+    : null;
+
+  const timeoutIdx = optionArgs.indexOf('--timeout');
+  const timeoutMs = timeoutIdx !== -1 && optionArgs[timeoutIdx + 1]
+    ? Math.max(1000, Number(optionArgs[timeoutIdx + 1]) * 1000)
+    : 120000;
+
+  const intervalIdx = optionArgs.indexOf('--interval');
+  const intervalMs = intervalIdx !== -1 && optionArgs[intervalIdx + 1]
+    ? Math.max(1000, Number(optionArgs[intervalIdx + 1]))
+    : 5000;
+
+  // Detect owner/repo
+  let ownerRepo;
+  try {
+    const repoJson = execFileSync('gh', ['repo', 'view', '--json', 'nameWithOwner', '-q', '.nameWithOwner'], {
+      cwd,
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    }).trim();
+    ownerRepo = repoJson;
+  } catch {
+    error('Failed to detect repository. Ensure gh CLI is authenticated and you are in a git repo.');
+  }
+
+  const started = Date.now();
+  let pollAttempts = 0;
+  let comments = [];
+
+  while (true) {
+    pollAttempts++;
+
+    // Fetch inline review comments
+    try {
+      const inlineRaw = execFileSync('gh', [
+        'api', `repos/${ownerRepo}/pulls/${pr}/comments`,
+        '--paginate', '-q',
+        '.[] | {bot: .user.login, file: .path, line: (.line // .original_line), body: .body, url: .html_url, created_at: .created_at, is_inline: true}',
+      ], { cwd, encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+      if (inlineRaw) {
+        for (const line of inlineRaw.split('\n')) {
+          try { comments.push(JSON.parse(line)); } catch {}
+        }
+      }
+    } catch {}
+
+    // Fetch general PR comments (issue comments)
+    try {
+      const generalRaw = execFileSync('gh', [
+        'api', `repos/${ownerRepo}/issues/${pr}/comments`,
+        '--paginate', '-q',
+        '.[] | {bot: .user.login, file: null, line: null, body: .body, url: .html_url, created_at: .created_at, is_inline: false}',
+      ], { cwd, encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+      if (generalRaw) {
+        for (const line of generalRaw.split('\n')) {
+          try { comments.push(JSON.parse(line)); } catch {}
+        }
+      }
+    } catch {}
+
+    // Also fetch PR review bodies (review-level comments)
+    try {
+      const reviewRaw = execFileSync('gh', [
+        'api', `repos/${ownerRepo}/pulls/${pr}/reviews`,
+        '--paginate', '-q',
+        '.[] | select(.body != null and .body != "") | {bot: .user.login, file: null, line: null, body: .body, url: .html_url, created_at: .submitted_at, is_inline: false}',
+      ], { cwd, encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+      if (reviewRaw) {
+        for (const line of reviewRaw.split('\n')) {
+          try { comments.push(JSON.parse(line)); } catch {}
+        }
+      }
+    } catch {}
+
+    // Filter to bot comments
+    comments = comments.filter(c => {
+      if (!c || !c.bot) return false;
+      const isBot = c.bot.endsWith('[bot]') || c.bot.includes('bot');
+      if (botFilter) {
+        return botFilter.some(b => c.bot.toLowerCase().includes(b));
+      }
+      return isBot;
+    });
+
+    if (comments.length > 0) break;
+
+    const elapsed = Date.now() - started;
+    if (elapsed >= timeoutMs) {
+      output({
+        pr_number: pr,
+        owner_repo: ownerRepo,
+        comments: [],
+        poll_attempts: pollAttempts,
+        elapsed_ms: elapsed,
+        timed_out: true,
+      }, raw);
+      return;
+    }
+
+    comments = [];
+    sleepMs(intervalMs);
+  }
+
+  output({
+    pr_number: pr,
+    owner_repo: ownerRepo,
+    comments,
+    poll_attempts: pollAttempts,
+    elapsed_ms: Date.now() - started,
+    timed_out: false,
+  }, raw);
+}
+
 module.exports = {
   cmdGenerateSlug,
   cmdCurrentTimestamp,
@@ -2187,4 +2313,5 @@ module.exports = {
   cmdTodoMatchPhase,
   cmdScaffold,
   cmdStats,
+  cmdFeedbackPoll,
 };

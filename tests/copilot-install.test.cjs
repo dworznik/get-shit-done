@@ -743,7 +743,7 @@ describe('Copilot agent conversion - real files', () => {
     assert.ok(toolsLine.includes("'read'"), 'Read mapped');
   });
 
-  test('all 18 agents convert without error', () => {
+  test('all 19 agents convert without error', () => {
     const agents = fs.readdirSync(agentsSrc)
       .filter(f => f.startsWith('gsd-') && f.endsWith('.md'));
     const expectedAgentCount = fs.readdirSync(agentsSrc)
@@ -1194,6 +1194,7 @@ describe('E2E: Copilot full install verification', () => {
       'gsd-codebase-mapper.agent.md',
       'gsd-debugger.agent.md',
       'gsd-executor.agent.md',
+      'gsd-feedback-collector.agent.md',
       'gsd-integration-checker.agent.md',
       'gsd-nyquist-auditor.agent.md',
       'gsd-phase-researcher.agent.md',

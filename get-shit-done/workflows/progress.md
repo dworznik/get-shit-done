@@ -86,6 +86,16 @@ Use this instead of manually reading/parsing ROADMAP.md.
 - Note `paused_at` if work was paused (from `$STATE`)
 - Count pending todos: use `init todos` or `list-todos`
 - Check for active debug sessions: `ls .planning/debug/*.md 2>/dev/null | grep -v resolved | wc -l`
+- Check for review feedback: count actionable findings across `.planning/feedback/*.md` files
+  ```bash
+  FEEDBACK_ACTIONABLE=$(node -e "
+    const fs=require('fs'),g=require('path').join;
+    try{const d=g(process.cwd(),'.planning','feedback');
+    const files=fs.readdirSync(d).filter(f=>f.endsWith('.md'));
+    let t=0;files.forEach(f=>{try{const m=fs.readFileSync(g(d,f),'utf8').match(/actionable_count: (\d+)/);if(m)t+=Number(m[1])}catch{}});
+    process.stdout.write(String(t))}catch{process.stdout.write('0')}" 2>/dev/null)
+  ```
+  If `FEEDBACK_ACTIONABLE > 0`, display: `Review Feedback: {FEEDBACK_ACTIONABLE} actionable findings`
   </step>
 
 <step name="report">

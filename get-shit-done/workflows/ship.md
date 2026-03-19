@@ -224,6 +224,7 @@ Verification: ✓ Passed
 Requirements: {N} REQ-IDs addressed
 
 Next steps:
+- /gsd:review-feedback {X} — collect bot review feedback
 - Review/approve PR
 - Merge when CI passes
 - /gsd:complete-milestone (if last phase in milestone)

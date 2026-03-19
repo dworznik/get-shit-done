@@ -1628,6 +1628,142 @@ function cmdInitRemoveWorkspace(cwd, name, raw) {
   output(result, raw);
 }
 
+function cmdInitReviewFeedback(cwd, phaseOrStackId, prNumber, raw) {
+  const config = loadConfig(cwd);
+  let deliveryMode = null;
+  let prList = [];
+  let phaseInfo = null;
+  let stackId = null;
+
+  // 1. Check if arg matches a focus-stack ID
+  if (phaseOrStackId) {
+    const stackRoot = path.join(cwd, '.planning', 'focus-stacks');
+    try {
+      const entries = fs.readdirSync(stackRoot, { withFileTypes: true });
+      for (const entry of entries) {
+        if (!entry.isDirectory()) continue;
+        if (!entry.name.startsWith(phaseOrStackId)) continue;
+        const statePath = path.join(stackRoot, entry.name, 'state.json');
+        try {
+          const state = JSON.parse(fs.readFileSync(statePath, 'utf-8'));
+          if (state && Array.isArray(state.slices)) {
+            deliveryMode = 'focus-stack';
+            stackId = state.stack_id || entry.name;
+            for (const slice of state.slices) {
+              if (slice.pr_number) {
+                prList.push({
+                  slice_id: String(slice.index || ''),
+                  pr_number: slice.pr_number,
+                  pr_url: slice.pr_url || null,
+                  title: slice.title || null,
+                  branch: slice.branch || null,
+                });
+              }
+            }
+            break;
+          }
+        } catch {}
+      }
+    } catch {}
+  }
+
+  // 2. Check if arg is a phase number with STACK_STATE.json
+  if (!deliveryMode && phaseOrStackId) {
+    phaseInfo = findPhaseInternal(cwd, phaseOrStackId);
+    if (phaseInfo?.directory) {
+      const stackStatePath = path.join(cwd, phaseInfo.directory, 'STACK_STATE.json');
+      try {
+        const stackState = JSON.parse(fs.readFileSync(stackStatePath, 'utf-8'));
+        if (stackState && Array.isArray(stackState.plans)) {
+          deliveryMode = 'stack-phase';
+          for (const plan of stackState.plans) {
+            if (plan.pr_number) {
+              prList.push({
+                slice_id: plan.plan_id || '',
+                pr_number: plan.pr_number,
+                pr_url: plan.pr_url || null,
+                title: plan.plan_id || null,
+                branch: plan.branch || null,
+              });
+            }
+          }
+        }
+      } catch {}
+    }
+  }
+
+  // 3. Fallback: single-pr mode
+  if (!deliveryMode) {
+    deliveryMode = 'single-pr';
+    if (prNumber) {
+      prList.push({
+        slice_id: 'single',
+        pr_number: Number(prNumber),
+        pr_url: null,
+        title: null,
+        branch: null,
+      });
+    } else {
+      // Auto-detect from current branch
+      try {
+        const prJson = execSync('gh pr view --json number,url,title,headRefName 2>/dev/null', {
+          cwd,
+          encoding: 'utf-8',
+          stdio: ['ignore', 'pipe', 'pipe'],
+        }).trim();
+        const pr = JSON.parse(prJson);
+        if (pr.number) {
+          prList.push({
+            slice_id: 'single',
+            pr_number: pr.number,
+            pr_url: pr.url || null,
+            title: pr.title || null,
+            branch: pr.headRefName || null,
+          });
+        }
+      } catch {}
+    }
+  }
+
+  // Resolve phase info if not already found
+  if (!phaseInfo && phaseOrStackId && /^\d/.test(phaseOrStackId)) {
+    phaseInfo = findPhaseInternal(cwd, phaseOrStackId);
+  }
+
+  // Check gh availability
+  let ghAvailable = false;
+  try {
+    execSync('gh auth status 2>/dev/null', { stdio: ['ignore', 'pipe', 'pipe'] });
+    ghAvailable = true;
+  } catch {}
+
+  const feedbackDir = path.join(cwd, '.planning', 'feedback');
+  let existingSessions = [];
+  try {
+    existingSessions = fs.readdirSync(feedbackDir)
+      .filter(f => f.endsWith('.md'))
+      .map(f => toPosixPath(path.join('.planning', 'feedback', f)));
+  } catch {}
+
+  const result = {
+    collector_model: resolveModelInternal(cwd, 'gsd-feedback-collector'),
+    commit_docs: config.commit_docs,
+    delivery_mode: deliveryMode,
+    phase_found: !!phaseInfo,
+    phase_dir: phaseInfo?.directory || null,
+    phase_number: phaseInfo?.phase_number || null,
+    phase_name: phaseInfo?.phase_name || null,
+    stack_id: stackId,
+    pr_list: prList,
+    gh_available: ghAvailable,
+    feedback_dir: toPosixPath(path.relative(cwd, feedbackDir)),
+    feedback_dir_exists: fs.existsSync(feedbackDir),
+    existing_sessions: existingSessions,
+  };
+
+  output(result, raw);
+}
+
 module.exports = {
   cmdInitExecutePhase,
   cmdInitPlanPhase,
@@ -1648,4 +1784,5 @@ module.exports = {
   cmdInitListWorkspaces,
   cmdInitRemoveWorkspace,
   detectChildRepos,
+  cmdInitReviewFeedback,
 };

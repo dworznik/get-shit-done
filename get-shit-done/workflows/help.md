@@ -408,6 +408,20 @@ Usage: `/gsd:ship 4` or `/gsd:ship 4 --draft`
 
 ---
 
+**`/gsd:review-feedback [phase|stack-id]`**
+Collect and triage bot review feedback from GitHub PRs.
+
+- Auto-detects PRs from STACK_STATE.json or focus-stack state.json
+- Polls each PR for bot comments (CodeRabbit, Copilot, etc.)
+- Creates per-slice feedback sessions in `.planning/feedback/`
+- Bridges actionable findings into gap format for `/gsd:plan-phase --gaps`
+
+Usage: `/gsd:review-feedback 4` (phase stack)
+Usage: `/gsd:review-feedback 260319-3ab` (focus-stack ID)
+Usage: `/gsd:review-feedback 4 --pr 123` (explicit PR)
+
+---
+
 **`/gsd:review --phase N [--gemini] [--claude] [--codex] [--all]`**
 Cross-AI peer review — invoke external AI CLIs to independently review phase plans.
 

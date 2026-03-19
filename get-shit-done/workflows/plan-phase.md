@@ -30,6 +30,12 @@ Parse JSON for: `researcher_model`, `planner_model`, `checker_model`, `research_
 
 **File paths (for <files_to_read> blocks):** `state_path`, `roadmap_path`, `requirements_path`, `context_path`, `import_path`, `research_path`, `verification_path`, `uat_path`, `reviews_path`. These are null if files don't exist.
 
+**Feedback files (for gap closure):**
+```bash
+FEEDBACK_FILES=$(ls .planning/feedback/${PADDED_PHASE}-*-pr*.md 2>/dev/null)
+```
+These contain bot review feedback gaps (if `--gaps` and feedback files exist).
+
 **If `planning_exists` is false:** Error — run `/gsd:new-project` first.
 
 ## 2. Parse and Normalize Arguments
@@ -497,6 +503,7 @@ Planner prompt:
 - {verification_path} (Verification Gaps - if --gaps)
 - {uat_path} (UAT Gaps - if --gaps)
 - {reviews_path} (Cross-AI Review Feedback - if --reviews)
+- {FEEDBACK_FILES} (Review Feedback Gaps - if --gaps and feedback exists)
 - {UI_SPEC_PATH} (UI Design Contract — visual/interaction specs, if exists)
 </files_to_read>
 

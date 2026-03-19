@@ -36,6 +36,8 @@
  *   supervisor-wait <dir> --stage      Wait for Codex supervisor completion
  *     [--kind quick|phase]
  *   supervisor-findings <path>         Normalize supervisor findings JSON
+ *   feedback-poll <pr> [--bots X]     Poll PR for bot review comments
+ *     [--timeout N] [--interval N]
  *   state-snapshot                     Structured parse of STATE.md
  *   phase-plan-index <phase>           Index plans with waves and status
  *   websearch <query>                  Search web via Brave API (if configured)
@@ -754,8 +756,12 @@ async function runCommand(command, args, cwd, raw) {
         case 'remove-workspace':
           init.cmdInitRemoveWorkspace(cwd, args[2], raw);
           break;
+        case 'review-feedback':
+          init.cmdInitReviewFeedback(cwd, args[2],
+            args.indexOf('--pr') !== -1 ? args[args.indexOf('--pr') + 1] : null, raw);
+          break;
         default:
-          error(`Unknown init workflow: ${workflow}\nAvailable: execute-phase, plan-phase, new-project, new-milestone, import-plan, quick, focus-stack, resume, verify-work, phase-op, todos, milestone-op, map-codebase, progress, manager, new-workspace, list-workspaces, remove-workspace`);
+          error(`Unknown init workflow: ${workflow}\nAvailable: execute-phase, plan-phase, new-project, new-milestone, import-plan, quick, focus-stack, resume, verify-work, phase-op, todos, milestone-op, map-codebase, progress, manager, new-workspace, list-workspaces, remove-workspace, review-feedback`);
       }
       break;
     }
@@ -810,6 +816,11 @@ async function runCommand(command, args, cwd, raw) {
 
     case 'supervisor-findings': {
       commands.cmdSupervisorFindings(cwd, args[1], raw);
+      break;
+    }
+
+    case 'feedback-poll': {
+      commands.cmdFeedbackPoll(cwd, args[1], args.slice(2), raw);
       break;
     }
 
