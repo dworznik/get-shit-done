@@ -1635,14 +1635,16 @@ function cmdInitReviewFeedback(cwd, phaseOrStackId, prNumber, raw) {
   let phaseInfo = null;
   let stackId = null;
 
-  // 1. Check if arg matches a focus-stack ID
-  if (phaseOrStackId) {
+  // 1. Check if arg matches a focus-stack ID (skip pure phase numbers like "2", "3.1")
+  const looksLikePhaseNumber = phaseOrStackId && /^\d+(\.\d+)?$/.test(phaseOrStackId);
+  if (phaseOrStackId && !looksLikePhaseNumber) {
     const stackRoot = path.join(cwd, '.planning', 'focus-stacks');
     try {
       const entries = fs.readdirSync(stackRoot, { withFileTypes: true });
       for (const entry of entries) {
         if (!entry.isDirectory()) continue;
-        if (!entry.name.startsWith(phaseOrStackId)) continue;
+        // Require exact match or match at a '-' boundary to avoid false positives
+        if (entry.name !== phaseOrStackId && !entry.name.startsWith(phaseOrStackId + '-')) continue;
         const statePath = path.join(stackRoot, entry.name, 'state.json');
         try {
           const state = JSON.parse(fs.readFileSync(statePath, 'utf-8'));

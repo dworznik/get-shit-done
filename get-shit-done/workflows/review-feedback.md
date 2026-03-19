@@ -44,7 +44,7 @@ Found {pr_list.length} PR(s) to collect feedback for ({delivery_mode} mode)
 If `feedback_dir_exists` and `existing_sessions` is non-empty, note:
 ```
 Existing feedback sessions found: {existing_sessions.length} file(s)
-These will be updated if PRs overlap.
+Sessions with prior triage (status != collecting) will be preserved — only new findings are appended.
 ```
 </step>
 
@@ -70,7 +70,7 @@ Determine feedback session filename:
 - Focus-stack: `{stack_id}-{slice_id}-pr{pr_number}.md`
 - Single PR: `pr{pr_number}.md`
 
-Spawn `gsd-feedback-collector` agent with:
+Check if a session file already exists at the output path. If it exists and its frontmatter `status` is not `collecting`, skip this slice (preserve prior triage). Otherwise spawn `gsd-feedback-collector` agent with:
 
 ```
 <files_to_read>
@@ -94,17 +94,15 @@ Auto-triage each finding by severity using bot-specific parsing rules.
 Generate Gaps entries for blocker and major findings.
 ```
 
+Track each created/updated session path in a `CREATED_SESSIONS` list for the aggregate step.
+
 **c. If no bot reviews found (timed_out=true or comments empty):**
 Note: `PR #{pr_number} ({title}): No bot reviews found within timeout.`
 Continue to next PR.
 </step>
 
 <step name="aggregate_and_triage">
-After all PRs are processed, read all feedback session files just created:
-
-```bash
-ls .planning/feedback/*.md 2>/dev/null
-```
+After all PRs are processed, read only the feedback session files created or updated in this run (from the `CREATED_SESSIONS` list built during collect_per_slice). Do **not** glob all `.planning/feedback/*.md` — that would include unrelated historical sessions.
 
 Display combined findings table:
 

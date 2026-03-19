@@ -92,7 +92,7 @@ updated: {ISO}
 
 **Return format:**
 
-```
+```markdown
 ## FEEDBACK COLLECTED
 
 - PR: #{N}

@@ -2183,14 +2183,24 @@ function cmdFeedbackPoll(cwd, prNumber, optionArgs, raw) {
     : null;
 
   const timeoutIdx = optionArgs.indexOf('--timeout');
-  const timeoutMs = timeoutIdx !== -1 && optionArgs[timeoutIdx + 1]
-    ? Math.max(1000, Number(optionArgs[timeoutIdx + 1]) * 1000)
-    : 120000;
+  let timeoutMs = 120000;
+  if (timeoutIdx !== -1 && optionArgs[timeoutIdx + 1]) {
+    const parsed = Number(optionArgs[timeoutIdx + 1]);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      error(`Invalid --timeout value: ${optionArgs[timeoutIdx + 1]}`);
+    }
+    timeoutMs = Math.max(1000, parsed * 1000);
+  }
 
   const intervalIdx = optionArgs.indexOf('--interval');
-  const intervalMs = intervalIdx !== -1 && optionArgs[intervalIdx + 1]
-    ? Math.max(1000, Number(optionArgs[intervalIdx + 1]))
-    : 5000;
+  let intervalMs = 5000;
+  if (intervalIdx !== -1 && optionArgs[intervalIdx + 1]) {
+    const parsed = Number(optionArgs[intervalIdx + 1]);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      error(`Invalid --interval value: ${optionArgs[intervalIdx + 1]}`);
+    }
+    intervalMs = Math.max(1000, parsed);
+  }
 
   // Detect owner/repo
   let ownerRepo;
