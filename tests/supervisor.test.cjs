@@ -580,7 +580,7 @@ describe('supervisor bundle commands', () => {
   });
 });
 
-describe('supervisor launch and wait commands', () => {
+describe('supervisor launch and wait commands', { skip: process.platform === 'win32' && 'tmux harness requires POSIX shell' }, () => {
   let tmpDir;
   let fakeBinDir;
   let fakeTmuxLog;
@@ -633,7 +633,7 @@ esac
     oldPath = process.env.PATH;
     oldTmux = process.env.TMUX;
     oldFakeTmuxPaneFile = process.env.FAKE_TMUX_PANE_FILE;
-    process.env.PATH = `${fakeBinDir}:${oldPath}`;
+    process.env.PATH = `${fakeBinDir}${path.delimiter}${oldPath}`;
     process.env.TMUX = 'test-session,1,0';
     process.env.FAKE_TMUX_PANE_FILE = path.join(fakeBinDir, 'pane.txt');
     fs.writeFileSync(process.env.FAKE_TMUX_PANE_FILE, '', 'utf-8');
