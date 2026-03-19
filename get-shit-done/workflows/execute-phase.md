@@ -746,7 +746,8 @@ If verifier returned `gaps_found`, skip this step and preserve the existing gap-
 Update `${PHASE_DIR}/PHASE_RUN_MANIFEST.json` with:
 - `execution_status: completed`
 - `verification_status: passed` or `human_needed-approved`
-- `final_status: pending-supervisor` (if supervisor gate is enabled) or `verified` (if supervisor is disabled)
+- `supervisor_execute_status: pending` (reset unconditionally to avoid stale state on reruns)
+- `final_status: pending-supervisor`
 
 Do the write explicitly before bundle generation:
 ```bash
@@ -760,7 +761,8 @@ const manifest = fs.existsSync(manifestPath)
   : {};
 manifest.execution_status = 'completed';
 manifest.verification_status = process.env.PHASE_VERIFICATION_STATUS || 'passed';
-manifest.final_status = manifest.supervisor_execute_status === 'pending' ? 'pending-supervisor' : 'verified';
+manifest.supervisor_execute_status = 'pending';
+manifest.final_status = 'pending-supervisor';
 fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
 NODE
 ```
