@@ -546,6 +546,8 @@ Build the postflight bundle:
 POST_BUNDLE=$(node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" supervisor-bundle "$QUICK_DIR" --stage post --raw)
 ```
 
+If `codex_supervisor_transport` is `unavailable`, stop with `codex_supervisor_transport_error`.
+
 If `codex_supervisor_transport` is `direct`, invoke the Codex-only supervisor skill:
 ```text
 Skill(skill="gsd:supervisor", args="--bundle ${POST_BUNDLE} --stage post")
