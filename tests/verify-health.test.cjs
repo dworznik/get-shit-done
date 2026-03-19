@@ -561,8 +561,8 @@ describe('validate health --repair command', () => {
     assert.strictEqual(diskConfig.workflow.verifier, true, 'workflow.verifier should default to true');
     assert.strictEqual(diskConfig.workflow.nyquist_validation, true, 'workflow.nyquist_validation should default to true');
     // Verify branch templates are present
-    assert.strictEqual(diskConfig.phase_branch_template, 'gsd/phase-{phase}-{slug}');
-    assert.strictEqual(diskConfig.milestone_branch_template, 'gsd/{milestone}-{slug}');
+    assert.strictEqual(diskConfig.phase_branch_template, 'feature/phase-{phase}-{slug}');
+    assert.strictEqual(diskConfig.milestone_branch_template, 'feature/{milestone}-{slug}');
   });
 
   test('resets config.json when JSON is invalid', () => {
