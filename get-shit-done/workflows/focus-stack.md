@@ -147,6 +147,9 @@ If any slice remains `multi-slice` after normalization, stop and ask the user to
 
 This step runs for `--resume` and `--restack-only`.
 
+Because each slice branch is squashed to a single commit (Step 6 sub-step 5),
+restacking is a simple single-commit rebase with minimal conflict surface.
+
 Detect changed completed slices:
 - for each completed slice, compare the current branch `HEAD` SHA to `head_sha` in `state.json`
 - if unchanged, do nothing
@@ -154,13 +157,23 @@ Detect changed completed slices:
 
 For each descendant in order:
 1. Checkout the descendant branch
-2. Rebase onto the updated parent branch
+   ```bash
+   git checkout "${descendant_branch}"
+   ```
+2. Rebase the single slice commit onto the updated parent
+   ```bash
+   git rebase "${parent_branch}"
+   ```
+   With single-commit branches (enforced by the Step 6 squash), this replays
+   exactly one commit, minimizing conflict surface.
 3. If rebase succeeds:
-   - `git push --force-with-lease`
-   - update `last_restacked_sha`
-   - update `head_sha`
-   - if slice status is `complete`, rerun the slice's verification path before proceeding
+   - ```bash
+     git push --force-with-lease
+     ```
+   - update `last_restacked_sha` and `head_sha`
+   - if slice status is `complete`, rerun verification before proceeding
 4. If rebase conflicts:
+   - `git rebase --abort`
    - stop immediately
    - mark the slice `restack-conflict`
    - mark higher descendants `blocked-by-ancestor`
@@ -208,8 +221,19 @@ Process slices strictly in order. For each slice:
    - require verification except for `tiny` slices unless `--full` forces it on
    - risky and oversized slices must trigger plan-checking
 
-5. Commit and open/update PR
-   - one commit per successful slice
+5. Squash slice commits into a single commit
+   - the parent branch point is the parent slice branch (or `$BASE_BRANCH` for slice 1)
+   - collapse all commits while keeping changes staged:
+     ```bash
+     git reset --soft "${PARENT_BRANCH}"
+     ```
+   - create a single conventional commit:
+     ```bash
+     git commit -m "feat(stack-${stack_slug}): [${index}/${total}] ${slice.title}"
+     ```
+   - verify: `git log --oneline ${PARENT_BRANCH}..HEAD` must show exactly 1 commit
+
+6. Open or update PR
    - create PR with `gh pr create`
    - target base branch for slice 1, parent slice branch for others
    - PR title format: `[${index}/${total}] ${slice.title}`
@@ -220,7 +244,7 @@ Process slices strictly in order. For each slice:
      - acceptance criteria
      - note that descendants are auto-restacked by GSD
 
-6. Record success
+7. Record success
    - update `status` to `complete`
    - store `head_sha`, `last_verified_sha`, `pr_number`, `pr_url`
    - refresh `STACK.md`
