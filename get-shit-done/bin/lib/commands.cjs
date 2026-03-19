@@ -1028,7 +1028,7 @@ function cmdSupervisorLaunch(cwd, dirArg, stage, raw, kind = 'quick') {
     error(`Supervisor bundle not found: ${paths.rel.bundle}. Run supervisor-bundle first.`);
   }
 
-  const fail = (message) => {
+  const fail = (message, priorStatus = null) => {
     const status = supervisorBaseStatus({
       manifest,
       stage,
@@ -1039,6 +1039,10 @@ function cmdSupervisorLaunch(cwd, dirArg, stage, raw, kind = 'quick') {
       windowName,
       errorMessage: message,
     });
+    // Preserve tmux handle from prior status so supervisor-wait can
+    // still inspect or clean up the orphaned window.
+    if (priorStatus?.tmux_target) status.tmux_target = priorStatus.tmux_target;
+    if (priorStatus?.started_at) status.started_at = priorStatus.started_at;
     status.state = 'failed';
     status.completed_at = new Date().toISOString();
     writeJsonFile(paths.abs.status, status);
@@ -1129,7 +1133,7 @@ function cmdSupervisorLaunch(cwd, dirArg, stage, raw, kind = 'quick') {
     sleepMs(250);
     maybeResubmitBootstrap(tmuxTarget, cwd, bootstrap);
   } catch (err) {
-    return fail(`Failed to send bootstrap command to tmux window: ${String(err.stderr || err.message || '').trim()}`);
+    return fail(`Failed to send bootstrap command to tmux window: ${String(err.stderr || err.message || '').trim()}`, status);
   }
 
   status.state = 'running';
