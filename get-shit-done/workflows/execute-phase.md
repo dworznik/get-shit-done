@@ -746,7 +746,7 @@ If verifier returned `gaps_found`, skip this step and preserve the existing gap-
 Update `${PHASE_DIR}/PHASE_RUN_MANIFEST.json` with:
 - `execution_status: completed`
 - `verification_status: passed` or `human_needed-approved`
-- `final_status: verified`
+- `final_status: pending-supervisor` (if supervisor gate is enabled) or `verified` (if supervisor is disabled)
 
 Do the write explicitly before bundle generation:
 ```bash
@@ -760,7 +760,7 @@ const manifest = fs.existsSync(manifestPath)
   : {};
 manifest.execution_status = 'completed';
 manifest.verification_status = process.env.PHASE_VERIFICATION_STATUS || 'passed';
-manifest.final_status = 'verified';
+manifest.final_status = manifest.supervisor_execute_status === 'pending' ? 'pending-supervisor' : 'verified';
 fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
 NODE
 ```
@@ -802,8 +802,8 @@ SUPERVISOR_EXECUTE_STATE=$(node -e 'const fs = require("fs"); const data = JSON.
 Gate behavior:
 - `blocked` → enter the execute supervisor revision loop (step 9.75)
 - `failed` or `timeout` → stop before `phase complete`, before ROADMAP/STATE/REQUIREMENTS updates, and before transition/auto-advance
-- `warnings` → continue but keep findings recorded in the manifest
-- `passed` → continue normally
+- `warnings` → update `PHASE_RUN_MANIFEST.json` `final_status` to `verified`, continue with findings recorded
+- `passed` → update `PHASE_RUN_MANIFEST.json` `final_status` to `verified`, continue normally
 </step>
 
 <step name="codex_supervisor_execute_revision_loop">
