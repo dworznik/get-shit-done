@@ -324,7 +324,9 @@ function extractSuccessCriteria(section) {
 function extractCheckpointTypes(planContent) {
   if (!planContent) return [];
   return [...new Set(
-    [...planContent.matchAll(/type="checkpoint:([^"]+)"/g)].map(match => match[1].trim()).filter(Boolean)
+    [...planContent.matchAll(/type="checkpoint(?::([^"]+))?"/g)]
+      .map(match => (match[1] || 'checkpoint').trim())
+      .filter(Boolean)
   )];
 }
 
