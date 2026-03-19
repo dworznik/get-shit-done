@@ -452,7 +452,7 @@ Task(
 Add or update the plan entry:
 ```json
 {
-  "plan_id": "${PHASE_NUM}-${NN}",
+  "plan_id": "${PHASE_NUMBER}-${NN}",
   "title": "${plan_name}",
   "status": "complete",
   "branch": "${PLAN_BRANCH}",

@@ -63,7 +63,7 @@ Create the minimum `.planning/` scaffold and stop. No questions, no research, no
    ```json
    {
      "mode": "yolo",
-     "granularity": "phase",
+     "granularity": "standard",
      "parallelization": false,
      "commit_docs": true,
      "model_profile": "balanced",
@@ -106,7 +106,7 @@ Create the minimum `.planning/` scaffold and stop. No questions, no research, no
      - ROADMAP.md (empty)
      - STATE.md
 
-   Next: /gsd:plan-phase 1 --stack
+   Next: /gsd:focus-stack or edit .planning/ROADMAP.md to add phases, then /gsd:plan-phase 1
    ```
    **Otherwise:**
    ```
@@ -116,7 +116,7 @@ Create the minimum `.planning/` scaffold and stop. No questions, no research, no
      - ROADMAP.md (empty)
      - STATE.md
 
-   Next: /gsd:focus-stack, /gsd:plan-phase 1, or edit .planning/ files directly
+   Next: /gsd:focus-stack, or edit .planning/ROADMAP.md to add phases, then /gsd:plan-phase 1
    ```
 10. Do NOT chain into discuss/plan/execute. Stop here.
 </empty_mode>
