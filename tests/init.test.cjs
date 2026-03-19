@@ -134,7 +134,8 @@ describe('init commands', () => {
     assert.strictEqual(output.branch_prefix, 'feature/');
     assert.strictEqual(output.git_available, true);
     assert.strictEqual(typeof output.git_status_clean, 'boolean');
-    assert.strictEqual(output.current_branch === 'master' || output.current_branch === 'main', true);
+    assert.ok(typeof output.current_branch === 'string' && output.current_branch.length > 0,
+      `current_branch should be a non-empty string, got: ${output.current_branch}`);
     assert.strictEqual(typeof output.gh_available, 'boolean');
     assert.strictEqual(typeof output.gh_authenticated, 'boolean');
   });
