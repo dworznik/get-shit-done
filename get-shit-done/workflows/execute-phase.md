@@ -392,7 +392,8 @@ Verify exactly one commit:
 ```bash
 COMMIT_COUNT=$(git log --oneline ${PARENT_BRANCH}..HEAD | wc -l)
 if [ "$COMMIT_COUNT" -ne 1 ]; then
-  echo "ERROR: Expected 1 commit after squash, got ${COMMIT_COUNT}"
+  echo "ERROR: Expected 1 commit after squash, got ${COMMIT_COUNT}" >&2
+  exit 1
 fi
 ```
 

@@ -156,8 +156,8 @@ State: "This phase has {X} plans, {Y} summaries."
 STACK_STATE_FILE=".planning/phases/[current-phase-dir]/STACK_STATE.json"
 if [ -f "$STACK_STATE_FILE" ]; then
   STACK_STATE=$(cat "$STACK_STATE_FILE")
-  STACK_TOTAL=$(node -e "const s=JSON.parse(require('fs').readFileSync('$STACK_STATE_FILE','utf8')); process.stdout.write(String(s.plans.length))")
-  STACK_COMPLETE=$(node -e "const s=JSON.parse(require('fs').readFileSync('$STACK_STATE_FILE','utf8')); process.stdout.write(String(s.plans.filter(p=>p.status==='complete').length))")
+  STACK_TOTAL=$(node -e "const s=JSON.parse(require('fs').readFileSync('$STACK_STATE_FILE','utf8')); const plans=Array.isArray(s.plans)?s.plans:[]; process.stdout.write(String(plans.length))")
+  STACK_COMPLETE=$(node -e "const s=JSON.parse(require('fs').readFileSync('$STACK_STATE_FILE','utf8')); const plans=Array.isArray(s.plans)?s.plans:[]; process.stdout.write(String(plans.filter(p=>p.status==='complete').length))")
 fi
 ```
 
