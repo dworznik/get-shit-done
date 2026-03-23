@@ -49,8 +49,8 @@ GSD stores project settings in `.planning/config.json`. Created during `/gsd:new
   },
   "git": {
     "branching_strategy": "none",
-    "phase_branch_template": "gsd/phase-{phase}-{slug}",
-    "milestone_branch_template": "gsd/{milestone}-{slug}",
+    "phase_branch_template": "feature/phase-{phase}-{slug}",
+    "milestone_branch_template": "feature/{milestone}-{slug}",
     "quick_branch_template": null
   },
   "gates": {
@@ -166,8 +166,8 @@ To keep planning artifacts out of git:
 | Setting | Type | Default | Description |
 |---------|------|---------|-------------|
 | `git.branching_strategy` | enum | `none` | `none`, `phase`, or `milestone` |
-| `git.phase_branch_template` | string | `gsd/phase-{phase}-{slug}` | Branch name template for phase strategy |
-| `git.milestone_branch_template` | string | `gsd/{milestone}-{slug}` | Branch name template for milestone strategy |
+| `git.phase_branch_template` | string | `feature/phase-{phase}-{slug}` | Branch name template for phase strategy |
+| `git.milestone_branch_template` | string | `feature/{milestone}-{slug}` | Branch name template for milestone strategy |
 | `git.quick_branch_template` | string or null | `null` | Optional branch name template for `/gsd:quick` tasks |
 
 ### Strategy Comparison

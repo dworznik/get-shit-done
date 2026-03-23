@@ -49,8 +49,8 @@ GSD はプロジェクト設定を `.planning/config.json` に保存します。
   },
   "git": {
     "branching_strategy": "none",
-    "phase_branch_template": "gsd/phase-{phase}-{slug}",
-    "milestone_branch_template": "gsd/{milestone}-{slug}",
+    "phase_branch_template": "feature/phase-{phase}-{slug}",
+    "milestone_branch_template": "feature/{milestone}-{slug}",
     "quick_branch_template": null
   },
   "gates": {
@@ -166,8 +166,8 @@ GSD はプロジェクト設定を `.planning/config.json` に保存します。
 | 設定 | 型 | デフォルト | 説明 |
 |------|-----|-----------|------|
 | `git.branching_strategy` | enum | `none` | `none`、`phase`、または `milestone` |
-| `git.phase_branch_template` | string | `gsd/phase-{phase}-{slug}` | phase 戦略のブランチ名テンプレート |
-| `git.milestone_branch_template` | string | `gsd/{milestone}-{slug}` | milestone 戦略のブランチ名テンプレート |
+| `git.phase_branch_template` | string | `feature/phase-{phase}-{slug}` | phase 戦略のブランチ名テンプレート |
+| `git.milestone_branch_template` | string | `feature/{milestone}-{slug}` | milestone 戦略のブランチ名テンプレート |
 | `git.quick_branch_template` | string or null | `null` | `/gsd:quick` タスク用のオプションのブランチ名テンプレート |
 
 ### 戦略の比較

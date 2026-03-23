@@ -1192,7 +1192,7 @@ describe('commit command', () => {
       JSON.stringify({
         commit_docs: true,
         branching_strategy: 'milestone',
-        milestone_branch_template: 'gsd/{milestone}-{slug}',
+        milestone_branch_template: 'feature/{milestone}-{slug}',
       })
     );
     // getMilestoneInfo reads ROADMAP.md for milestone version/name
@@ -1213,7 +1213,7 @@ describe('commit command', () => {
     // Verify we're on the strategy branch
     const { execFileSync } = require('child_process');
     const branch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: tmpDir, encoding: 'utf-8' }).trim();
-    assert.strictEqual(branch, 'gsd/v1.0-initial-release', 'should be on milestone branch');
+    assert.strictEqual(branch, 'feature/v1.0-initial-release', 'should be on milestone branch');
   });
 
   test('creates strategy branch before first commit when branching_strategy is phase', () => {
@@ -1223,7 +1223,7 @@ describe('commit command', () => {
       JSON.stringify({
         commit_docs: true,
         branching_strategy: 'phase',
-        phase_branch_template: 'gsd/phase-{phase}-{slug}',
+        phase_branch_template: 'feature/phase-{phase}-{slug}',
       })
     );
     // Create ROADMAP.md with a phase
@@ -1248,7 +1248,7 @@ describe('commit command', () => {
     // Verify we're on the strategy branch
     const { execFileSync } = require('child_process');
     const branch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: tmpDir, encoding: 'utf-8' }).trim();
-    assert.strictEqual(branch, 'gsd/phase-01-setup', 'should be on phase branch');
+    assert.strictEqual(branch, 'feature/phase-01-setup', 'should be on phase branch');
   });
 });
 

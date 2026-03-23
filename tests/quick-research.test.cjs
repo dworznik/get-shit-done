@@ -263,35 +263,35 @@ describe('quick task: research file in task directory', () => {
 describe('quick workflow: banner variants for flag combinations', () => {
   let content;
 
-  test('has banner for research-only mode', () => {
+  test('has dynamic banner with research flag support', () => {
     content = fs.readFileSync(path.join(WORKFLOWS_DIR, 'quick.md'), 'utf-8');
     assert.ok(
-      content.includes('QUICK TASK (RESEARCH)'),
-      'should have banner for --research only'
+      content.includes('(+ research)'),
+      'should have dynamic banner template for --research flag'
     );
   });
 
-  test('has banner for discuss + research mode', () => {
+  test('has dynamic banner with full flag support', () => {
     content = fs.readFileSync(path.join(WORKFLOWS_DIR, 'quick.md'), 'utf-8');
     assert.ok(
-      content.includes('DISCUSS + RESEARCH)'),
-      'should have banner for --discuss --research'
+      content.includes('(+ full)'),
+      'should have dynamic banner template for --full flag'
     );
   });
 
-  test('has banner for research + full mode', () => {
+  test('has dynamic banner with discuss flag support', () => {
     content = fs.readFileSync(path.join(WORKFLOWS_DIR, 'quick.md'), 'utf-8');
     assert.ok(
-      content.includes('RESEARCH + FULL)'),
-      'should have banner for --research --full'
+      content.includes('(+ discuss)'),
+      'should have dynamic banner template for --discuss flag'
     );
   });
 
-  test('has banner for all three flags', () => {
+  test('documents flag composability', () => {
     content = fs.readFileSync(path.join(WORKFLOWS_DIR, 'quick.md'), 'utf-8');
     assert.ok(
-      content.includes('DISCUSS + RESEARCH + FULL)'),
-      'should have banner for --discuss --research --full'
+      content.includes('--discuss --research --full'),
+      'should document that flags are composable'
     );
   });
 });

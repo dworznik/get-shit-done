@@ -594,8 +594,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Added
 - Git branching strategy configuration with three options:
   - `none` (default): commit to current branch
-  - `phase`: create branch per phase (`gsd/phase-{N}-{slug}`)
-  - `milestone`: create branch per milestone (`gsd/{version}-{slug}`)
+  - `phase`: create branch per phase (`feature/phase-{N}-{slug}`)
+  - `milestone`: create branch per milestone (`feature/{version}-{slug}`)
 - Squash merge option at milestone completion (recommended) with merge-with-history alternative
 - Context compliance verification dimension in plan checker — flags if plans contradict user decisions
 

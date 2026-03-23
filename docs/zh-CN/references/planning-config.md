@@ -10,8 +10,8 @@
 },
 "git": {
   "branching_strategy": "none",
-  "phase_branch_template": "gsd/phase-{phase}-{slug}",
-  "milestone_branch_template": "gsd/{milestone}-{slug}"
+  "phase_branch_template": "feature/phase-{phase}-{slug}",
+  "milestone_branch_template": "feature/{milestone}-{slug}"
 }
 ```
 
@@ -20,8 +20,8 @@
 | `commit_docs` | `true` | 是否将规划工件提交到 git |
 | `search_gitignored` | `false` | 在广泛 rg 搜索中添加 `--no-ignore` |
 | `git.branching_strategy` | `"none"` | Git 分支策略：`"none"`、`"phase"` 或 `"milestone"` |
-| `git.phase_branch_template` | `"gsd/phase-{phase}-{slug}"` | 阶段策略的分支模板 |
-| `git.milestone_branch_template` | `"gsd/{milestone}-{slug}"` | 里程碑策略的分支模板 |
+| `git.phase_branch_template` | `"feature/phase-{phase}-{slug}"` | 阶段策略的分支模板 |
+| `git.milestone_branch_template` | `"feature/{milestone}-{slug}"` | 里程碑策略的分支模板 |
 </config_schema>
 
 <commit_docs_behavior>
@@ -123,7 +123,7 @@ CLI 在内部检查 `commit_docs` 配置和 gitignore 状态 —— 无需手动
 
 **当 `git.branching_strategy: "phase"`：**
 - `execute-phase` 在执行前创建/切换到分支
-- 分支名来自 `phase_branch_template`（如 `gsd/phase-03-authentication`）
+- 分支名来自 `phase_branch_template`（如 `feature/phase-03-authentication`）
 - 所有计划提交到该分支
 - 阶段完成后用户手动合并分支
 - `complete-milestone` 提供合并所有阶段分支的选项

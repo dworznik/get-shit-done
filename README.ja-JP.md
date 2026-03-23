@@ -687,8 +687,8 @@ GSDが実行中にブランチをどう扱うかを制御します。
 | 設定 | オプション | デフォルト | 説明 |
 |---------|---------|---------|--------------|
 | `git.branching_strategy` | `none`, `phase`, `milestone` | `none` | ブランチ作成戦略 |
-| `git.phase_branch_template` | string | `gsd/phase-{phase}-{slug}` | フェーズブランチのテンプレート |
-| `git.milestone_branch_template` | string | `gsd/{milestone}-{slug}` | マイルストーンブランチのテンプレート |
+| `git.phase_branch_template` | string | `feature/phase-{phase}-{slug}` | フェーズブランチのテンプレート |
+| `git.milestone_branch_template` | string | `feature/{milestone}-{slug}` | マイルストーンブランチのテンプレート |
 
 **戦略：**
 - **`none`** — 現在のブランチにコミット（デフォルトのGSD動作）

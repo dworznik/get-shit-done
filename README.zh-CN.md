@@ -667,8 +667,8 @@ GSD 将项目设置保存在 `.planning/config.json`。你可以在 `/gsd:new-pr
 | Setting | Options | Default | 作用 |
 |---------|---------|---------|------|
 | `git.branching_strategy` | `none`, `phase`, `milestone` | `none` | 分支创建策略 |
-| `git.phase_branch_template` | string | `gsd/phase-{phase}-{slug}` | phase 分支模板 |
-| `git.milestone_branch_template` | string | `gsd/{milestone}-{slug}` | milestone 分支模板 |
+| `git.phase_branch_template` | string | `feature/phase-{phase}-{slug}` | phase 分支模板 |
+| `git.milestone_branch_template` | string | `feature/{milestone}-{slug}` | milestone 分支模板 |
 
 **策略说明：**
 - **`none`**：直接提交到当前分支（GSD 默认行为）

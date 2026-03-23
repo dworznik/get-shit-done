@@ -27,8 +27,8 @@
 - `search_gitignored: false`
 - `brave_search: false`（または環境検出による `true`）
 - `git.branching_strategy: "none"`
-- `git.phase_branch_template: "gsd/phase-{phase}-{slug}"`
-- `git.milestone_branch_template: "gsd/{milestone}-{slug}"`
+- `git.phase_branch_template: "feature/phase-{phase}-{slug}"`
+- `git.milestone_branch_template: "feature/{milestone}-{slug}"`
 
 最初から存在すべき完全な設定:
 
@@ -43,8 +43,8 @@
   "brave_search": false,
   "git": {
     "branching_strategy": "none",
-    "phase_branch_template": "gsd/phase-{phase}-{slug}",
-    "milestone_branch_template": "gsd/{milestone}-{slug}"
+    "phase_branch_template": "feature/phase-{phase}-{slug}",
+    "milestone_branch_template": "feature/{milestone}-{slug}"
   },
   "workflow": {
     "research": true,
@@ -120,8 +120,8 @@ describe('config-new-project command', () => {
     // git セクションが3つのキーすべてを持つ
     assert.ok(config.git && typeof config.git === 'object', 'git section should exist');
     assert.strictEqual(config.git.branching_strategy, 'none');
-    assert.strictEqual(config.git.phase_branch_template, 'gsd/phase-{phase}-{slug}');
-    assert.strictEqual(config.git.milestone_branch_template, 'gsd/{milestone}-{slug}');
+    assert.strictEqual(config.git.phase_branch_template, 'feature/phase-{phase}-{slug}');
+    assert.strictEqual(config.git.milestone_branch_template, 'feature/{milestone}-{slug}');
 
     // workflow セクションが4つのキーすべてを持つ
     assert.ok(config.workflow && typeof config.workflow === 'object', 'workflow section should exist');
@@ -284,8 +284,8 @@ function buildNewProjectConfig(cwd, userChoices) {
     brave_search: hasBraveSearch,
     git: {
       branching_strategy: 'none',
-      phase_branch_template: 'gsd/phase-{phase}-{slug}',
-      milestone_branch_template: 'gsd/{milestone}-{slug}',
+      phase_branch_template: 'feature/phase-{phase}-{slug}',
+      milestone_branch_template: 'feature/{milestone}-{slug}',
     },
     workflow: {
       research: true,

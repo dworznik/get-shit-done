@@ -3,8 +3,6 @@ name: gsd-supervisor
 description: Reviews quick/focus and phase bundles for spec gaps, dependency incompatibilities, and implementation mismatches. Spawned by /gsd:supervisor.
 tools: Read, Bash, Grep, Glob
 color: cyan
-skills:
-  - gsd-supervisor-workflow
 ---
 
 <role>

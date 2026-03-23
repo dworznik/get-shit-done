@@ -752,8 +752,8 @@ function cmdValidateHealth(cwd, options, raw) {
               commit_docs: true,
               search_gitignored: false,
               branching_strategy: 'none',
-              phase_branch_template: 'gsd/phase-{phase}-{slug}',
-              milestone_branch_template: 'gsd/{milestone}-{slug}',
+              phase_branch_template: 'feature/phase-{phase}-{slug}',
+              milestone_branch_template: 'feature/{milestone}-{slug}',
               quick_branch_template: null,
               workflow: {
                 research: true,

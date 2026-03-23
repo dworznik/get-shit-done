@@ -368,8 +368,8 @@ describe('config-new-project command', () => {
     // git section present with all three keys
     assert.ok(config.git && typeof config.git === 'object', 'git section should exist');
     assert.strictEqual(config.git.branching_strategy, 'none');
-    assert.strictEqual(config.git.phase_branch_template, 'gsd/phase-{phase}-{slug}');
-    assert.strictEqual(config.git.milestone_branch_template, 'gsd/{milestone}-{slug}');
+    assert.strictEqual(config.git.phase_branch_template, 'feature/phase-{phase}-{slug}');
+    assert.strictEqual(config.git.milestone_branch_template, 'feature/{milestone}-{slug}');
 
     // workflow section present with all keys
     assert.ok(config.workflow && typeof config.workflow === 'object', 'workflow section should exist');

@@ -486,8 +486,8 @@ GSD はプロジェクト設定を `.planning/config.json` に保存します。
   },
   "git": {
     "branching_strategy": "none",
-    "phase_branch_template": "gsd/phase-{phase}-{slug}",
-    "milestone_branch_template": "gsd/{milestone}-{slug}",
+    "phase_branch_template": "feature/phase-{phase}-{slug}",
+    "milestone_branch_template": "feature/{milestone}-{slug}",
     "quick_branch_template": null
   }
 }
@@ -538,8 +538,8 @@ GSD はプロジェクト設定を `.planning/config.json` に保存します。
 | 設定 | オプション | デフォルト | 制御内容 |
 |---------|---------|---------|------------------|
 | `git.branching_strategy` | `none`, `phase`, `milestone` | `none` | ブランチ作成のタイミングと方法 |
-| `git.phase_branch_template` | テンプレート文字列 | `gsd/phase-{phase}-{slug}` | phase 戦略のブランチ名 |
-| `git.milestone_branch_template` | テンプレート文字列 | `gsd/{milestone}-{slug}` | milestone 戦略のブランチ名 |
+| `git.phase_branch_template` | テンプレート文字列 | `feature/phase-{phase}-{slug}` | phase 戦略のブランチ名 |
+| `git.milestone_branch_template` | テンプレート文字列 | `feature/{milestone}-{slug}` | milestone 戦略のブランチ名 |
 | `git.quick_branch_template` | テンプレート文字列 または `null` | `null` | `/gsd:quick` タスク用のオプションブランチ名 |
 
 **ブランチ戦略の説明：**

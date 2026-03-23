@@ -3,8 +3,6 @@ name: gsd-plan-importer
 description: Converts an imported agent-written plan into GSD project artifacts, roadmap phases, and phase import notes. Spawned by /gsd:import-plan.
 tools: Read, Write, Bash, Glob, Grep
 color: purple
-skills:
-  - gsd-plan-importer-workflow
 # hooks:
 #   PostToolUse:
 #     - matcher: "Write|Edit"
