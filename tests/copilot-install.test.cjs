@@ -1390,7 +1390,9 @@ describe('Claude uninstall preserves user-generated files (#1423)', () => {
   });
 
   test('preserves dev-preferences.md across uninstall', () => {
-    const prefsPath = path.join(tmpDir, '.claude', 'commands', 'gsd', 'dev-preferences.md');
+    const prefsDir = path.join(tmpDir, '.claude', 'commands', 'gsd');
+    fs.mkdirSync(prefsDir, { recursive: true });
+    const prefsPath = path.join(prefsDir, 'dev-preferences.md');
     const content = '---\nname: dev-preferences\n---\n# Preferences\nUse TypeScript strict.\n';
     fs.writeFileSync(prefsPath, content);
 
